@@ -1,3 +1,5 @@
+use std::{collections::hash_map::DefaultHasher, hash::Hasher};
+
 use bevy::{
     prelude::*,
     render::{
@@ -7,7 +9,7 @@ use bevy::{
     utils::HashMap,
 };
 
-use crate::TileMap;
+use crate::{Tile, TileMap};
 
 #[derive(Debug, Default, Component, Deref, DerefMut)]
 pub struct ChunkEntities(HashMap<UVec3, Entity>);
@@ -107,6 +109,9 @@ fn build_mesh(
     let scaled_square_positions = SQUARE_UVS.map(|pos| [pos[0] * step_x, pos[1] * step_y]);
     let start_index = chunk_coord * chunk_size;
 
+    // TODO
+    let chunk_hash = chunk_hash(start_index, layer, chunk_size, tile_map);
+
     let mut positions = Vec::with_capacity((chunk_size.x * chunk_size.y * 4) as usize);
     let mut uvs = Vec::with_capacity((chunk_size.x * chunk_size.y * 4) as usize);
     let mut indices = Vec::with_capacity((chunk_size.x * chunk_size.y * 6) as usize);
@@ -148,4 +153,19 @@ fn build_mesh(
     } else {
         None
     }
+}
+
+fn chunk_hash(start_index: UVec2, layer: u32, chunk_size: UVec2, tile_map: &TileMap) -> u64 {
+    let mut hasher = DefaultHasher::default();
+
+    for x in 0..chunk_size.x {
+        for y in 0..chunk_size.y {
+            if let Some(Some(_)) = tile_map.get((start_index + UVec2::new(x, y)).extend(layer)) {
+                hasher.write_u32(x);
+                hasher.write_u32(y);
+            }
+        }
+    }
+
+    hasher.finish()
 }
