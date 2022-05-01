@@ -1,5 +1,3 @@
-use std::{collections::hash_map::DefaultHasher, hash::Hasher};
-
 use bevy::{
     prelude::*,
     render::{
@@ -11,15 +9,19 @@ use bevy::{
 
 use crate::{Tile, TileMap};
 
-#[derive(Debug, Default, Component, Deref, DerefMut)]
-pub struct ChunkEntities(HashMap<UVec3, Entity>);
+#[derive(Debug, Default, Component, Clone, Copy, Deref, DerefMut, PartialEq, Eq, Hash)]
+pub struct ChunkCoord(pub UVec3);
 
 #[derive(Debug, Default, Component, Deref, DerefMut)]
-pub struct ChunkMesh(pub(crate) Option<Handle<Mesh>>);
+pub struct ChunkEntities(HashMap<ChunkCoord, Entity>);
+
+#[derive(Debug, Default, Component, Deref, DerefMut)]
+pub struct ChunkMesh(pub(crate) Handle<Mesh>);
 
 #[derive(Debug, Default, Bundle)]
 pub struct ChunkBundle {
     mesh: ChunkMesh,
+    data: ChunkData,
     aabb: Aabb,
     #[bundle]
     transform: TransformBundle,
@@ -27,145 +29,165 @@ pub struct ChunkBundle {
     computed_visibility: ComputedVisibility,
 }
 
-#[derive(Debug, Deref, DerefMut)]
-pub struct ChunkSize(UVec2);
+#[derive(Debug, Default)]
+pub struct ChunkMeshIdCache(HashMap<UVec2, Handle<Mesh>>);
 
-impl Default for ChunkSize {
-    fn default() -> Self {
-        ChunkSize(UVec2::new(8, 8))
+impl ChunkMeshIdCache {
+    pub fn get_or_insert_mesh(
+        &mut self,
+        size: UVec2,
+        meshes: &mut ResMut<Assets<Mesh>>,
+    ) -> Handle<Mesh> {
+        if let Some(mesh_handle) = self.0.get(&size) {
+            mesh_handle.as_weak()
+        } else {
+            const SQUARE: [[f32; 2]; 4] = [[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0]];
+            let positions =
+                SQUARE.map(|coord| [coord[0] * size.x as f32, coord[1] * size.y as f32, 0.0]);
+
+            let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+            mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions.to_vec());
+            mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, SQUARE.to_vec());
+
+            const INDICES: [u16; 6] = [0, 2, 1, 0, 3, 2];
+            mesh.set_indices(Some(Indices::U16(INDICES.to_vec())));
+
+            let mesh_handle = meshes.add(mesh);
+            let ret = mesh_handle.as_weak();
+            self.0.insert(size, mesh_handle);
+
+            ret
+        }
     }
 }
 
 pub fn generate_or_update_chunks(
     mut commands: Commands,
-    chunk_size: Res<ChunkSize>,
+    mut chunk_mesh_id_cache: ResMut<ChunkMeshIdCache>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut tile_maps: Query<(Entity, &mut ChunkEntities, &TileMap), Changed<TileMap>>,
-    mut chunk_meshs: Query<(&mut Aabb, &mut ChunkMesh), Without<TileMap>>,
+    mut tile_maps: Query<(Entity, &mut ChunkEntities, &mut TileMap)>,
+    mut chunk_meshs: Query<(&mut Aabb, &mut ChunkMesh, &mut ChunkData), Without<TileMap>>,
 ) {
-    for (entity, mut chunk_entities, tile_map) in tile_maps.iter_mut() {
-        for layer in 0..tile_map.layer_count() {
-            let mut coord_counts = tile_map.size / chunk_size.0;
-            if tile_map.size % chunk_size.0 != UVec2::ZERO {
-                coord_counts += UVec2::ONE;
-            }
+    for (entity, mut chunk_entities, mut tile_map) in tile_maps.iter_mut() {
+        if tile_map.dirty_chunks.len() == 0 {
+            continue;
+        }
 
-            for x in 0..coord_counts.x {
-                for y in 0..coord_counts.y {
-                    let coord = UVec2::new(x, y);
+        let screen_chunk_size = tile_map.chunk_size * tile_map.tile_size;
 
-                    if let Some(chunk) = chunk_entities.get(&coord.extend(layer as u32)) {
-                        let (mut aabb, mut chunk_mesh) = chunk_meshs
-                            .get_mut(*chunk)
-                            .expect("A chunk for a tile map is missing");
+        let mesh_handle = chunk_mesh_id_cache.get_or_insert_mesh(screen_chunk_size, &mut meshes);
+        let computed_aabb = meshes
+            .get(mesh_handle.clone_weak())
+            .unwrap()
+            .compute_aabb()
+            .unwrap();
 
-                        chunk_mesh.0 =
-                            build_mesh(coord, chunk_size.0, tile_map, layer as u32).map(|mesh| {
-                                *aabb = mesh.compute_aabb().unwrap();
-                                meshes.add(mesh)
-                            });
-                    } else {
-                        commands.entity(entity).with_children(|child_builder| {
-                            let mut aabb = Aabb::default();
-                            let mesh_handle =
-                                build_mesh(coord, chunk_size.0, tile_map, 0).map(|mesh| {
-                                    aabb = mesh.compute_aabb().unwrap();
-                                    meshes.add(mesh)
-                                });
-                            let entity = child_builder
-                                .spawn_bundle(ChunkBundle {
-                                    mesh: ChunkMesh(mesh_handle),
-                                    aabb,
-                                    transform: TransformBundle {
-                                        local: Transform::from_xyz(
-                                            x as f32 * chunk_size.x as f32 * tile_map.tile_size.x,
-                                            y as f32 * chunk_size.y as f32 * tile_map.tile_size.y,
-                                            0.0,
-                                        ),
-                                        ..Default::default()
-                                    },
-                                    ..Default::default()
-                                })
-                                .id();
-                            chunk_entities.insert(coord.extend(layer as u32), entity);
-                        });
-                    }
-                }
+        for chunk_coord in tile_map.dirty_chunks.drain().collect::<Vec<_>>() {
+            if let Some(chunk) = chunk_entities.get(&chunk_coord) {
+                let (mut aabb, mut chunk_mesh, mut chunk_data) = chunk_meshs
+                    .get_mut(*chunk)
+                    .expect("A chunk for a tile map is missing");
+
+                *aabb = computed_aabb.clone();
+                chunk_mesh.0 = mesh_handle.clone_weak();
+                chunk_data.sync(&tile_map);
+            } else {
+                commands.entity(entity).with_children(|child_builder| {
+                    let entity = child_builder
+                        .spawn_bundle(ChunkBundle {
+                            mesh: ChunkMesh(mesh_handle.clone_weak()),
+                            aabb: computed_aabb.clone(),
+                            data: ChunkData::new(chunk_coord, &tile_map),
+                            transform: TransformBundle {
+                                local: Transform::from_translation(
+                                    (chunk_coord.0 * screen_chunk_size.extend(1)).as_vec3(),
+                                ),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        })
+                        .id();
+                    chunk_entities.insert(chunk_coord, entity);
+                });
             }
         }
     }
 }
 
-fn build_mesh(
-    chunk_coord: UVec2,
+#[derive(Debug, Default, Component, Clone)]
+pub struct ChunkData {
+    tiles: Vec<Option<Tile>>,
+    chunk_coord: ChunkCoord,
     chunk_size: UVec2,
-    tile_map: &TileMap,
-    layer: u32,
-) -> Option<Mesh> {
-    const SQUARE_UVS: [[f32; 2]; 4] = [[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0]];
-
-    let step_x = tile_map.tile_size.x;
-    let step_y = tile_map.tile_size.y;
-    let scaled_square_positions = SQUARE_UVS.map(|pos| [pos[0] * step_x, pos[1] * step_y]);
-    let start_index = chunk_coord * chunk_size;
-
-    // TODO
-    let chunk_hash = chunk_hash(start_index, layer, chunk_size, tile_map);
-
-    let mut positions = Vec::with_capacity((chunk_size.x * chunk_size.y * 4) as usize);
-    let mut uvs = Vec::with_capacity((chunk_size.x * chunk_size.y * 4) as usize);
-    let mut indices = Vec::with_capacity((chunk_size.x * chunk_size.y * 6) as usize);
-
-    let mut next_indices: [u16; 6] = [0, 2, 1, 0, 3, 2];
-
-    for x in 0..chunk_size.x {
-        for y in 0..chunk_size.y {
-            if let Some(Some(_)) = tile_map.get((start_index + UVec2::new(x, y)).extend(layer)) {
-                let x = x as f32;
-                let y = y as f32;
-
-                for position in scaled_square_positions {
-                    positions.push([
-                        position[0] + step_x * x,
-                        position[1] + step_y * y,
-                        layer as f32,
-                    ]);
-                }
-                uvs.extend(SQUARE_UVS);
-
-                indices.extend(next_indices);
-                next_indices = next_indices.map(|index| index + 4);
-            }
-        }
-    }
-
-    if positions.len() != 0 {
-        positions.shrink_to_fit();
-        uvs.shrink_to_fit();
-        indices.shrink_to_fit();
-
-        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-        mesh.set_indices(Some(Indices::U16(indices)));
-
-        Some(mesh)
-    } else {
-        None
-    }
+    tile_size: UVec2,
 }
 
-fn chunk_hash(start_index: UVec2, layer: u32, chunk_size: UVec2, tile_map: &TileMap) -> u64 {
-    let mut hasher = DefaultHasher::default();
+impl ChunkData {
+    pub fn new(chunk_coord: ChunkCoord, tile_map: &TileMap) -> Self {
+        let mut tiles = vec![None; (tile_map.chunk_size.x * tile_map.chunk_size.y) as usize];
 
-    for x in 0..chunk_size.x {
+        Self::copy_tiles(
+            &mut tiles,
+            &tile_map.tiles[chunk_coord.z as usize],
+            chunk_coord.0.truncate(),
+            tile_map.chunk_size,
+            tile_map.size.truncate(),
+        );
+
+        ChunkData {
+            tiles,
+            chunk_coord,
+            chunk_size: tile_map.chunk_size,
+            tile_size: tile_map.tile_size,
+        }
+    }
+
+    pub fn sync(&mut self, tile_map: &TileMap) {
+        self.tile_size = tile_map.tile_size;
+
+        Self::copy_tiles(
+            &mut self.tiles,
+            &tile_map.tiles[self.chunk_coord.z as usize],
+            self.chunk_coord.0.truncate(),
+            tile_map.chunk_size,
+            tile_map.size.truncate(),
+        );
+    }
+
+    fn copy_tiles(
+        dest: &mut [Option<Tile>],
+        src: &[Option<Tile>],
+        chunk_coord: UVec2,
+        chunk_size: UVec2,
+        tile_map_size: UVec2,
+    ) {
+        let start_tile_coord = chunk_coord * chunk_size;
+        let copy_width = (tile_map_size.x - start_tile_coord.x).min(chunk_size.x) as usize;
+
         for y in 0..chunk_size.y {
-            if let Some(Some(_)) = tile_map.get((start_index + UVec2::new(x, y)).extend(layer)) {
-                hasher.write_u32(x);
-                hasher.write_u32(y);
+            let row_start_tile_coord = start_tile_coord + UVec2::new(0, y);
+            if row_start_tile_coord.y < tile_map_size.y {
+                let dest_start = (y * chunk_size.x) as usize;
+                let dest_end = dest_start + copy_width;
+
+                let src_start =
+                    (row_start_tile_coord.y * tile_map_size.x + row_start_tile_coord.x) as usize;
+                let src_end = src_start + copy_width;
+
+                dest[dest_start..dest_end].copy_from_slice(&src[src_start..src_end]);
             }
         }
     }
 
-    hasher.finish()
+    pub fn tiles(&self) -> &Vec<Option<Tile>> {
+        &self.tiles
+    }
+
+    pub fn tile_size(&self) -> UVec2 {
+        self.tile_size
+    }
+
+    pub fn chunk_size(&self) -> UVec2 {
+        self.chunk_size
+    }
 }

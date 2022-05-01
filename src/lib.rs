@@ -11,7 +11,6 @@ use bevy::{
     },
 };
 
-pub use chunk::ChunkSize;
 pub use tile_map::*;
 
 pub struct TileMapPlugin;
@@ -19,7 +18,7 @@ pub struct TileMapPlugin;
 impl Plugin for TileMapPlugin {
     fn build(&self, app: &mut App) {
         app.add_asset::<TileSheet>()
-            .init_resource::<ChunkSize>()
+            .init_resource::<chunk::ChunkMeshIdCache>()
             .init_resource::<render::ChunkShader>()
             .add_system(chunk::generate_or_update_chunks);
 
@@ -35,8 +34,10 @@ impl Plugin for TileMapPlugin {
                 .init_resource::<SpecializedRenderPipelines<render::TileMapPipeline>>()
                 .init_resource::<render::ChunkMeta>()
                 .init_resource::<render::ExtractedChunks>()
+                .init_resource::<render::TileUniform>()
                 .add_render_command::<Transparent2d, render::DrawChunk>()
                 .add_system_to_stage(RenderStage::Extract, render::extract_chunks)
+                .add_system_to_stage(RenderStage::Prepare, render::prepare_tiles)
                 .add_system_to_stage(RenderStage::Queue, render::queue_chunks);
         };
     }
