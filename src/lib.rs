@@ -6,21 +6,26 @@ use bevy::{
     core_pipeline::Transparent2d,
     prelude::*,
     render::{
-        render_phase::AddRenderCommand, render_resource::SpecializedRenderPipelines, RenderApp,
-        RenderStage,
+        render_asset::{PrepareAssetLabel, RenderAssetPlugin},
+        render_phase::AddRenderCommand,
+        render_resource::SpecializedRenderPipelines,
+        RenderApp, RenderStage,
     },
 };
 
+pub use render::TileSheet;
 pub use tile_map::*;
 
 pub struct TileMapPlugin;
 
 impl Plugin for TileMapPlugin {
     fn build(&self, app: &mut App) {
-        app.add_asset::<TileSheet>()
-            .init_resource::<chunk::ChunkMeshIdCache>()
-            .init_resource::<render::ChunkShader>()
-            .add_system(chunk::generate_or_update_chunks);
+        app.add_plugin(RenderAssetPlugin::<TileSheet>::with_prepare_asset_label(
+            PrepareAssetLabel::PreAssetPrepare,
+        ))
+        .add_asset::<TileSheet>()
+        .init_resource::<render::ChunkShader>()
+        .add_system(chunk::generate_or_update_chunks);
 
         let shader = app
             .world
@@ -32,7 +37,7 @@ impl Plugin for TileMapPlugin {
                 .insert_resource(shader)
                 .init_resource::<render::TileMapPipeline>()
                 .init_resource::<SpecializedRenderPipelines<render::TileMapPipeline>>()
-                .init_resource::<render::ChunkMeta>()
+                .init_resource::<render::TileMapMeta>()
                 .init_resource::<render::ExtractedChunks>()
                 .init_resource::<render::TileUniform>()
                 .add_render_command::<Transparent2d, render::DrawChunk>()

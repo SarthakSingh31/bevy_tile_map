@@ -1,21 +1,29 @@
 use std::ops::{Index, IndexMut};
 
-use bevy::{asset::HandleId, prelude::*, reflect::TypeUuid, utils::HashSet};
+use bevy::{prelude::*, utils::HashSet};
 
-use crate::chunk::{ChunkCoord, ChunkEntities};
+use crate::{
+    chunk::{ChunkCoord, ChunkEntities},
+    TileSheet,
+};
 
 #[derive(Debug, Default, Component)]
 pub struct TileMap {
     pub(crate) tiles: Vec<Vec<Option<Tile>>>,
-    pub(crate) size: UVec3,
+    pub size: UVec3,
     pub chunk_size: UVec2,
     pub tile_size: UVec2,
-    pub(crate) tile_sheets: HashSet<Handle<TileSheet>>,
     pub(crate) dirty_chunks: HashSet<ChunkCoord>,
+    pub(crate) tile_sheet: Handle<TileSheet>,
 }
 
 impl TileMap {
-    pub fn new(size: UVec2, chunk_size: UVec2, tile_size: UVec2) -> Self {
+    pub fn new(
+        size: UVec2,
+        chunk_size: UVec2,
+        tile_size: UVec2,
+        tile_sheet: Handle<TileSheet>,
+    ) -> Self {
         assert!(chunk_size.x >= 1 && chunk_size.y >= 1);
 
         TileMap {
@@ -23,20 +31,9 @@ impl TileMap {
             size: size.extend(1),
             chunk_size,
             tile_size,
-            tile_sheets: HashSet::default(),
             dirty_chunks: HashSet::default(),
+            tile_sheet,
         }
-    }
-
-    pub fn add_tile_sheet(&mut self, tileset_handle: Handle<TileSheet>) -> TileSheetHandle {
-        let id = tileset_handle.id;
-        let was_weak = tileset_handle.is_weak();
-        if self.tile_sheets.insert(tileset_handle) {
-            if was_weak {
-                warn!("The tilesheet handle was weak so the asset backing it might get dropped. Passing a strong handle would be better");
-            }
-        }
-        TileSheetHandle(id)
     }
 
     pub fn get(&self, coord: UVec3) -> Option<&Option<Tile>> {
@@ -156,19 +153,8 @@ impl IndexMut<[u32; 3]> for TileMap {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Tile {
-    pub tile_sheet: TileSheetHandle,
-    pub tile_idx: u8,
+    pub idx: u16,
 }
-
-#[derive(Debug, Clone, TypeUuid)]
-#[uuid = "fd3a76be-60a3-4b67-a2da-8c987f65ae16"]
-pub struct TileSheet {
-    pub tile_sheet: Handle<Image>,
-    pub tile_size: Vec2,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct TileSheetHandle(HandleId);
 
 #[derive(Default, Bundle)]
 pub struct TileMapBundle {

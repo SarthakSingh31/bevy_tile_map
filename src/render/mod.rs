@@ -1,3 +1,5 @@
+mod tile_sheet;
+
 use std::cmp::Ordering;
 
 use bevy::{
@@ -9,12 +11,8 @@ use bevy::{
     },
     prelude::*,
     render::{
-        mesh::GpuBufferInfo,
         render_asset::RenderAssets,
-        render_phase::{
-            DrawFunctions, EntityRenderCommand, RenderCommandResult, RenderPhase, SetItemPipeline,
-            TrackedRenderPass,
-        },
+        render_phase::*,
         render_resource::{std140::AsStd140, *},
         renderer::{RenderDevice, RenderQueue},
         texture::BevyDefault,
@@ -25,10 +23,9 @@ use bevy::{
 };
 use bytemuck::{Pod, Zeroable};
 
-use crate::{
-    chunk::{ChunkData, ChunkMesh},
-    Tile,
-};
+use crate::{chunk::ChunkData, Tile};
+
+pub use tile_sheet::TileSheet;
 
 #[derive(Clone)]
 pub struct ChunkShader(Handle<Shader>);
@@ -45,6 +42,7 @@ impl FromWorld for ChunkShader {
 pub struct TileMapPipeline {
     view_layout: BindGroupLayout,
     tiles_layout: BindGroupLayout,
+    texture_sampler_layout: BindGroupLayout,
     chunk_shader: Handle<Shader>,
 }
 
@@ -80,11 +78,35 @@ impl FromWorld for TileMapPipeline {
             label: Some("TileMap::Tiles::Layout"),
         });
 
+        let texture_sampler_layout =
+            render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: false },
+                            view_dimension: TextureViewDimension::D2Array,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
+                        count: None,
+                    },
+                ],
+                label: Some("TileMap::Texture::Sampler::Layout"),
+            });
+
         let chunk_shader = world.resource::<ChunkShader>().0.clone();
 
         TileMapPipeline {
             view_layout,
             tiles_layout,
+            texture_sampler_layout,
             chunk_shader,
         }
     }
@@ -137,7 +159,11 @@ impl SpecializedRenderPipeline for TileMapPipeline {
                     write_mask: ColorWrites::ALL,
                 }],
             }),
-            layout: Some(vec![self.view_layout.clone(), self.tiles_layout.clone()]),
+            layout: Some(vec![
+                self.view_layout.clone(),
+                self.tiles_layout.clone(),
+                self.texture_sampler_layout.clone(),
+            ]),
             primitive: PrimitiveState {
                 front_face: FrontFace::Ccw,
                 cull_mode: None,
@@ -163,6 +189,7 @@ pub struct ExtractedChunk {
     data: Vec<Option<Tile>>,
     chunk_size: UVec2,
     tile_size: UVec2,
+    tile_sheet_handle: Handle<TileSheet>,
     transform: GlobalTransform,
 }
 
@@ -172,7 +199,9 @@ pub struct ExtractedChunks {
 }
 
 pub fn extract_chunks(
+    images: Res<Assets<Image>>,
     mut render_world: ResMut<RenderWorld>,
+    mut tile_sheets: ResMut<Assets<TileSheet>>,
     chunks: Query<(&ComputedVisibility, &ChunkData, &GlobalTransform)>,
 ) {
     let mut extracted_chunks = render_world.resource_mut::<ExtractedChunks>();
@@ -183,11 +212,16 @@ pub fn extract_chunks(
             continue;
         }
 
+        if let Some(tile_sheet) = tile_sheets.get_mut(chunk_data.tile_sheet()) {
+            tile_sheet.load_images(&images);
+        }
+
         extracted_chunks.chunks.push(ExtractedChunk {
             index,
             data: chunk_data.tiles().clone(),
             chunk_size: chunk_data.chunk_size(),
             tile_size: chunk_data.tile_size(),
+            tile_sheet_handle: chunk_data.tile_sheet().as_weak(),
             transform: transform.clone(),
         });
     }
@@ -221,7 +255,7 @@ pub fn prepare_tiles(
         buffer.clear()
     }
 
-    for chunk in &extracted_chunks.chunks {
+    for chunk in &mut extracted_chunks.chunks {
         let buffer = if let Some(buffer) = tile_uniforms.0.get_mut(&chunk.index) {
             buffer
         } else {
@@ -232,8 +266,10 @@ pub fn prepare_tiles(
         };
         for tile in &chunk.data {
             if let Some(tile) = tile {
-                // TODO: Ignoring the image for now
-                buffer.push(tile.tile_idx as i32);
+                // TODO: This requries a lot of work to support multiple tilesheets
+                // chunk.tile_sheet_handle = Some(Handle::weak(tile.tile_sheet.id()));
+
+                buffer.push(tile.idx as i32);
             } else {
                 buffer.push(-1);
             }
@@ -242,18 +278,16 @@ pub fn prepare_tiles(
     }
 }
 
-pub struct ChunkMeta {
+pub struct TileMapMeta {
     view_bind_group: Option<BindGroup>,
-    texture_bind_group: Option<BindGroup>,
     // Chunk size to index vec
     index_buffers: HashMap<UVec2, BufferVec<u16>>,
 }
 
-impl Default for ChunkMeta {
+impl Default for TileMapMeta {
     fn default() -> Self {
         Self {
             view_bind_group: None,
-            texture_bind_group: None,
             index_buffers: HashMap::default(),
         }
     }
@@ -300,7 +334,7 @@ pub fn queue_chunks(
     draw_functions: Res<DrawFunctions<Transparent2d>>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
-    mut chunk_meta: ResMut<ChunkMeta>,
+    mut chunk_meta: ResMut<TileMapMeta>,
     view_uniforms: Res<ViewUniforms>,
     tile_map_pipeline: Res<TileMapPipeline>,
     msaa: Res<Msaa>,
@@ -378,6 +412,7 @@ pub fn queue_chunks(
                         },
                         ChunkInstanceBuffer(instance_buffer),
                         TilesBindGroup(tiles_bind_group),
+                        chunk.tile_sheet_handle.as_weak::<TileSheet>(),
                     ))
                     .id();
                 let sort_key = FloatOrd(chunk.transform.translation.z);
@@ -398,14 +433,14 @@ pub type DrawChunk = (
     SetItemPipeline,
     SetChunkViewBindGroup<0>,
     SetChunkTilesBindGroup<1>,
-    // SetChunkTextureBindGroup<1>,
+    SetChunkTextureBindGroup<2>,
     DrawChunkCommand,
 );
 
 pub struct SetChunkViewBindGroup<const I: usize>;
 
 impl<const I: usize> EntityRenderCommand for SetChunkViewBindGroup<I> {
-    type Param = (SRes<ChunkMeta>, SQuery<Read<ViewUniformOffset>>);
+    type Param = (SRes<TileMapMeta>, SQuery<Read<ViewUniformOffset>>);
 
     #[inline]
     fn render<'w>(
@@ -442,33 +477,37 @@ impl<const I: usize> EntityRenderCommand for SetChunkTilesBindGroup<I> {
     }
 }
 
-// pub struct SetChunkTextureBindGroup<const I: usize>;
+pub struct SetChunkTextureBindGroup<const I: usize>;
 
-// impl<const I: usize> EntityRenderCommand for SetChunkTextureBindGroup<I> {
-//     type Param = (SRes<ChunkMeta>, SQuery<Read<ViewUniformOffset>>);
+impl<const I: usize> EntityRenderCommand for SetChunkTextureBindGroup<I> {
+    type Param = (
+        SRes<RenderAssets<TileSheet>>,
+        SQuery<Read<Handle<TileSheet>>>,
+    );
 
-//     #[inline]
-//     fn render<'w>(
-//         _view: Entity,
-//         _item: Entity,
-//         (_chunk_meta, _view_query): SystemParamItem<'w, '_, Self::Param>,
-//         _pass: &mut TrackedRenderPass<'w>,
-//     ) -> RenderCommandResult {
-//         // let view_uniform = view_query.get(view).unwrap();
-//         // pass.set_bind_group(
-//         //     I,
-//         //     chunk_meta.into_inner().view_bind_group.as_ref().unwrap(),
-//         //     &[view_uniform.offset],
-//         // );
-//         RenderCommandResult::Success
-//     }
-// }
+    #[inline]
+    fn render<'w>(
+        _view: Entity,
+        item: Entity,
+        (assets, handle_query): SystemParamItem<'w, '_, Self::Param>,
+        pass: &mut TrackedRenderPass<'w>,
+    ) -> RenderCommandResult {
+        let tile_sheet_handle = handle_query.get(item).unwrap();
+        if let Some(tile_sheet) = assets.into_inner().get(tile_sheet_handle) {
+            pass.set_bind_group(I, &tile_sheet.bind_group, &[]);
+
+            RenderCommandResult::Success
+        } else {
+            RenderCommandResult::Failure
+        }
+    }
+}
 
 pub struct DrawChunkCommand;
 
 impl EntityRenderCommand for DrawChunkCommand {
     type Param = (
-        SRes<ChunkMeta>,
+        SRes<TileMapMeta>,
         SQuery<(Read<ChunkInstanceBuffer>, Read<ChunkInstanceData>)>,
     );
 

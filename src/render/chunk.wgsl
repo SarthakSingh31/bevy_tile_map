@@ -61,11 +61,11 @@ var texture_sampler: sampler;
 
 [[stage(fragment)]]
 fn fragment(in: VertexOutput) -> [[location(0)]] vec4<f32> {
-    // let color = textureSample(texture_array, texture_sampler, in.uv, in.index);
+    let color = textureSample(texture_array, texture_sampler, in.uv, in.index);
 
     if (in.index < 0) {
         discard;
-    } else {
-        return vec4<f32>(1.0);
     }
+
+    return color;
 }
