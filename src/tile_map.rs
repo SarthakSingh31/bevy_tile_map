@@ -152,6 +152,7 @@ impl IndexMut<[u32; 3]> for TileMap {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
 pub struct Tile {
     pub idx: u16,
 }

@@ -19,7 +19,7 @@ use bevy::{
         view::{ViewUniform, ViewUniformOffset, ViewUniforms},
         RenderWorld,
     },
-    utils::HashMap,
+    utils::{HashMap, HashSet},
 };
 use bytemuck::{Pod, Zeroable};
 
@@ -200,6 +200,7 @@ pub struct ExtractedChunks {
 
 pub fn extract_chunks(
     images: Res<Assets<Image>>,
+    mut image_event_reader: EventReader<AssetEvent<Image>>,
     mut render_world: ResMut<RenderWorld>,
     mut tile_sheets: ResMut<Assets<TileSheet>>,
     chunks: Query<(&ComputedVisibility, &ChunkData, &GlobalTransform)>,
@@ -207,13 +208,26 @@ pub fn extract_chunks(
     let mut extracted_chunks = render_world.resource_mut::<ExtractedChunks>();
     extracted_chunks.chunks.clear();
 
+    let mut updated_images = HashSet::new();
+    for event in image_event_reader.iter() {
+        match event {
+            AssetEvent::Modified { handle } | AssetEvent::Created { handle } => {
+                updated_images.insert(handle.as_weak::<Image>());
+            }
+            AssetEvent::Removed { .. } => {}
+        }
+    }
+
+    let mut updated_tile_sheets = HashSet::new();
     for (index, (visibility, chunk_data, transform)) in chunks.iter().enumerate() {
         if !visibility.is_visible {
             continue;
         }
 
-        if let Some(tile_sheet) = tile_sheets.get_mut(chunk_data.tile_sheet()) {
-            tile_sheet.load_images(&images);
+        if updated_tile_sheets.insert(chunk_data.tile_sheet().as_weak::<TileSheet>()) {
+            if let Some(tile_sheet) = tile_sheets.get_mut(chunk_data.tile_sheet()) {
+                tile_sheet.update_images(&images, &updated_images);
+            }
         }
 
         extracted_chunks.chunks.push(ExtractedChunk {
@@ -266,9 +280,6 @@ pub fn prepare_tiles(
         };
         for tile in &chunk.data {
             if let Some(tile) = tile {
-                // TODO: This requries a lot of work to support multiple tilesheets
-                // chunk.tile_sheet_handle = Some(Handle::weak(tile.tile_sheet.id()));
-
                 buffer.push(tile.idx as i32);
             } else {
                 buffer.push(-1);

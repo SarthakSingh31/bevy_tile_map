@@ -10,6 +10,7 @@ use bevy::{
         renderer::{RenderDevice, RenderQueue},
         texture::{GpuImage, TextureFormatPixelInfo},
     },
+    utils::HashSet,
 };
 
 use super::TileMapPipeline;
@@ -36,52 +37,48 @@ impl TileSheet {
         }
     }
 
-    pub fn load_images(&mut self, images: &Assets<Image>) {
+    pub fn update_images(
+        &mut self,
+        images: &Assets<Image>,
+        updated_images: &HashSet<Handle<Image>>,
+    ) {
         for (idx, image_handle) in self.tile_sets.iter().enumerate() {
-            if let Some(img) = images.get(image_handle) {
-                // let debug_img = Self::debug_extract_first_image(
-                //     &img.data,
-                //     UVec2::new(
-                //         img.texture_descriptor.size.width,
-                //         img.texture_descriptor.size.height,
-                //     ),
-                // )
-                // .repeat(256);
-                // let debug_img = img.data[0..(16 * 16 * 4)].repeat(256);
-                // dbg!(img.texture_descriptor.format);
+            if updated_images.contains(image_handle) {
+                println!("Updating Image");
+                if let Some(img) = images.get(image_handle) {
+                    if let Some((data, layers, format)) = self.tile_data.get_mut(idx) {
+                        data.clear();
+                        Self::extract_tile_images(
+                            data,
+                            &img.data,
+                            UVec2::new(
+                                img.texture_descriptor.size.width,
+                                img.texture_descriptor.size.height,
+                            ),
+                            self.tile_size,
+                            img.texture_descriptor.format,
+                        );
+                        *layers = img.texture_descriptor.size;
+                        *format = img.texture_descriptor.format;
+                    } else {
+                        let mut data = Vec::with_capacity(img.data.len());
+                        Self::extract_tile_images(
+                            &mut data,
+                            &img.data,
+                            UVec2::new(
+                                img.texture_descriptor.size.width,
+                                img.texture_descriptor.size.height,
+                            ),
+                            self.tile_size,
+                            img.texture_descriptor.format,
+                        );
 
-                if let Some((data, layers, format)) = self.tile_data.get_mut(idx) {
-                    data.clear();
-                    Self::extract_tile_images(
-                        data,
-                        &img.data,
-                        UVec2::new(
-                            img.texture_descriptor.size.width,
-                            img.texture_descriptor.size.height,
-                        ),
-                        self.tile_size,
-                        img.texture_descriptor.format,
-                    );
-                    *layers = img.texture_descriptor.size;
-                    *format = img.texture_descriptor.format;
-                } else {
-                    let mut data = Vec::with_capacity(img.data.len());
-                    Self::extract_tile_images(
-                        &mut data,
-                        &img.data,
-                        UVec2::new(
-                            img.texture_descriptor.size.width,
-                            img.texture_descriptor.size.height,
-                        ),
-                        self.tile_size,
-                        img.texture_descriptor.format,
-                    );
-
-                    self.tile_data.push((
-                        data,
-                        img.texture_descriptor.size,
-                        img.texture_descriptor.format,
-                    ));
+                        self.tile_data.push((
+                            data,
+                            img.texture_descriptor.size,
+                            img.texture_descriptor.format,
+                        ));
+                    }
                 }
             }
         }
