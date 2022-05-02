@@ -1,5 +1,5 @@
 use bevy::{diagnostic, input::mouse::MouseWheel, prelude::*};
-use bevy_tilemap::{Tile, TileMap, TileMapBundle, TileMapPlugin, TileSheet};
+use bevy_tile_map::{Tile, TileMap, TileMapBundle, TileMapPlugin, TileSheet};
 use rand::prelude::*;
 
 fn main() {
