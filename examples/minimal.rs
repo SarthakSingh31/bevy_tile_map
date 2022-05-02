@@ -20,6 +20,7 @@ fn setup(
 ) {
     let tile_sheet = tile_sheets.add(TileSheet::new(
         vec![asset_server.load("0x72_16x16DungeonTileset.v4.png")],
+        // UVec2::new(16, 16),
         UVec2::new(16, 16),
     ));
 

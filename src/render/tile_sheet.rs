@@ -8,7 +8,7 @@ use bevy::{
         render_asset::{PrepareAssetError, RenderAsset},
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
-        texture::GpuImage,
+        texture::{GpuImage, TextureFormatPixelInfo},
     },
 };
 
@@ -38,18 +38,77 @@ impl TileSheet {
 
     pub fn load_images(&mut self, images: &Assets<Image>) {
         for (idx, image_handle) in self.tile_sets.iter().enumerate() {
-            if let Some(image) = images.get(image_handle) {
+            if let Some(img) = images.get(image_handle) {
+                // let debug_img = Self::debug_extract_first_image(
+                //     &img.data,
+                //     UVec2::new(
+                //         img.texture_descriptor.size.width,
+                //         img.texture_descriptor.size.height,
+                //     ),
+                // )
+                // .repeat(256);
+                // let debug_img = img.data[0..(16 * 16 * 4)].repeat(256);
+                // dbg!(img.texture_descriptor.format);
+
                 if let Some((data, layers, format)) = self.tile_data.get_mut(idx) {
                     data.clear();
-                    data.extend(&image.data);
-                    *layers = image.texture_descriptor.size;
-                    *format = image.texture_descriptor.format;
+                    Self::extract_tile_images(
+                        data,
+                        &img.data,
+                        UVec2::new(
+                            img.texture_descriptor.size.width,
+                            img.texture_descriptor.size.height,
+                        ),
+                        self.tile_size,
+                        img.texture_descriptor.format,
+                    );
+                    *layers = img.texture_descriptor.size;
+                    *format = img.texture_descriptor.format;
                 } else {
+                    let mut data = Vec::with_capacity(img.data.len());
+                    Self::extract_tile_images(
+                        &mut data,
+                        &img.data,
+                        UVec2::new(
+                            img.texture_descriptor.size.width,
+                            img.texture_descriptor.size.height,
+                        ),
+                        self.tile_size,
+                        img.texture_descriptor.format,
+                    );
+
                     self.tile_data.push((
-                        image.data.clone(),
-                        image.texture_descriptor.size,
-                        image.texture_descriptor.format,
+                        data,
+                        img.texture_descriptor.size,
+                        img.texture_descriptor.format,
                     ));
+                }
+            }
+        }
+    }
+
+    fn extract_tile_images(
+        dest: &mut Vec<u8>,
+        img: &[u8],
+        img_size: UVec2,
+        tile_size: UVec2,
+        format: TextureFormat,
+    ) {
+        let pixel_size = format.pixel_size();
+        let tile_size_in_pixels = tile_size.x as usize * pixel_size;
+        let num_tiles = img_size / tile_size;
+
+        for tile_y in 0..num_tiles.y {
+            let outer_row =
+                tile_y as usize * img_size.x as usize * pixel_size * tile_size.y as usize;
+
+            for tile_x in 0..num_tiles.x {
+                for y in (0..tile_size.y).rev() {
+                    let inner_row = y as usize * img_size.x as usize * pixel_size;
+                    let col_in_row = tile_size_in_pixels * tile_x as usize;
+                    let copy_start = outer_row + inner_row + col_in_row;
+
+                    dest.extend(&img[copy_start..(copy_start + tile_size_in_pixels)]);
                 }
             }
         }
