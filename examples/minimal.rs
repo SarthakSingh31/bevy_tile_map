@@ -1,6 +1,5 @@
 use bevy::{diagnostic, input::mouse::MouseWheel, prelude::*};
 use bevy_tilemap::{Tile, TileMap, TileMapBundle, TileMapPlugin, TileSheet};
-use rand::prelude::*;
 
 fn main() {
     App::new()
@@ -10,8 +9,7 @@ fn main() {
         .add_plugin(diagnostic::LogDiagnosticsPlugin::default())
         .add_plugin(TileMapPlugin)
         .add_startup_system(setup)
-        // .add_system(switch_to_next_texture)
-        .add_system(switch_tiles_to_random)
+        .add_system(switch_to_next_texture)
         .add_system(control_camera)
         .run();
 }
@@ -33,13 +31,9 @@ fn setup(
         tile_sheet,
     );
 
-    let mut rng = thread_rng();
-
     for x in 0..tile_map.size.x {
         for y in 0..tile_map.size.y {
-            tile_map[(x, y, 0)] = Some(Tile {
-                idx: rng.gen_range(0..256),
-            });
+            tile_map[(x, y, 0)] = Some(Tile { idx: 0 });
         }
     }
 
@@ -50,27 +44,27 @@ fn setup(
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
 }
 
-pub struct TileSwitchTimer(Timer);
+fn switch_to_next_texture(input: Res<Input<KeyCode>>, mut tile_maps: Query<&mut TileMap>) {
+    let direction: i32 = if input.just_pressed(KeyCode::Up) {
+        -16
+    } else if input.just_pressed(KeyCode::Down) {
+        16
+    } else if input.just_pressed(KeyCode::Left) {
+        -1
+    } else if input.just_pressed(KeyCode::Right) {
+        1
+    } else {
+        0
+    };
 
-impl Default for TileSwitchTimer {
-    fn default() -> Self {
-        TileSwitchTimer(Timer::new(std::time::Duration::from_millis(100), true))
-    }
-}
-
-fn switch_tiles_to_random(
-    mut timer: Local<TileSwitchTimer>,
-    time: Res<Time>,
-    mut tile_maps: Query<&mut TileMap>,
-) {
-    if timer.0.tick(time.delta()).just_finished() {
-        let mut rng = thread_rng();
-
+    if direction != 0 {
         for mut tile_map in tile_maps.iter_mut() {
-            for x in 0..tile_map.size.x {
-                for y in 0..tile_map.size.x {
-                    if let Some(tile) = &mut tile_map[(x, y, 0)] {
-                        tile.idx = rng.gen_range(0..256);
+            for layer in 0..tile_map.size.z {
+                for x in 0..tile_map.size.x {
+                    for y in 0..tile_map.size.x {
+                        if let Some(tile) = &mut tile_map[(x, y, layer)] {
+                            tile.idx = (tile.idx as i32 + direction).clamp(0, 256) as u16;
+                        }
                     }
                 }
             }

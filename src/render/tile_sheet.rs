@@ -8,7 +8,7 @@ use bevy::{
         render_asset::{PrepareAssetError, RenderAsset},
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
-        texture::{GpuImage, TextureFormatPixelInfo},
+        texture::TextureFormatPixelInfo,
     },
     utils::HashSet,
 };
@@ -20,8 +20,9 @@ use super::TileMapPipeline;
 pub struct TileSheet {
     tile_sets: Vec<Handle<Image>>,
     tile_size: UVec2,
-    tile_data: Vec<(Vec<u8>, Extent3d, TextureFormat)>,
-    gpu_image: Option<GpuImage>,
+    tile_data: Vec<u8>,
+    array_count: u32,
+    format: Option<TextureFormat>,
 }
 
 impl TileSheet {
@@ -33,7 +34,8 @@ impl TileSheet {
             tile_sets,
             tile_size,
             tile_data: Vec::new(),
-            gpu_image: None,
+            array_count: 0,
+            format: None,
         }
     }
 
@@ -42,76 +44,71 @@ impl TileSheet {
         images: &Assets<Image>,
         updated_images: &HashSet<Handle<Image>>,
     ) {
-        // TODO: very temporary. Only loading the first image
-        for (idx, image_handle) in self.tile_sets.iter().enumerate() {
-            if updated_images.contains(image_handle) {
-                if let Some(img) = images.get(image_handle) {
-                    if let Some((data, layers, format)) = self.tile_data.get_mut(idx) {
-                        data.clear();
-                        Self::extract_tile_images(
-                            data,
-                            &img.data,
-                            UVec2::new(
-                                img.texture_descriptor.size.width,
-                                img.texture_descriptor.size.height,
-                            ),
-                            self.tile_size,
-                            img.texture_descriptor.format,
-                        );
-                        *layers = img.texture_descriptor.size;
-                        *format = img.texture_descriptor.format;
-                    } else {
-                        let mut data = Vec::with_capacity(img.data.len());
-                        Self::extract_tile_images(
-                            &mut data,
-                            &img.data,
-                            UVec2::new(
-                                img.texture_descriptor.size.width,
-                                img.texture_descriptor.size.height,
-                            ),
-                            self.tile_size,
-                            img.texture_descriptor.format,
-                        );
+        if self
+            .tile_sets
+            .iter()
+            .any(|handle| updated_images.contains(handle))
+        {
+            let mut used_space = 0;
+            let mut format = None;
 
-                        self.tile_data.push((
-                            data,
-                            img.texture_descriptor.size,
-                            img.texture_descriptor.format,
-                        ));
+            for image_handle in self.tile_sets.iter() {
+                if let Some(img) = images.get(image_handle) {
+                    let needed_space = img
+                        .data
+                        .len()
+                        .checked_sub(self.tile_data.len() - used_space);
+                    if let Some(needed_space) = needed_space {
+                        self.tile_data.extend(vec![0; needed_space]);
+                    }
+
+                    Self::make_into_tiles(
+                        &mut self.tile_data[used_space..(used_space + img.data.len())],
+                        &img.data,
+                        self.tile_size,
+                        img.texture_descriptor.format,
+                    );
+
+                    used_space += img.data.len();
+                    if let Some(format) = format {
+                        assert_eq!(format, img.texture_descriptor.format);
+                    } else {
+                        format = Some(img.texture_descriptor.format);
                     }
                 }
+            }
+
+            self.format = format;
+            if let Some(format) = self.format {
+                self.array_count = (used_space
+                    / (self.tile_size.x as usize * self.tile_size.y as usize * format.pixel_size()))
+                    as u32;
             }
         }
     }
 
-    fn extract_tile_images(
-        dest: &mut Vec<u8>,
-        img: &[u8],
-        img_size: UVec2,
-        tile_size: UVec2,
-        format: TextureFormat,
-    ) {
+    fn make_into_tiles(dest: &mut [u8], src: &[u8], tile_size: UVec2, format: TextureFormat) {
         let pixel_size = format.pixel_size();
-        let tile_size_in_pixels = tile_size.x as usize * pixel_size;
-        let num_tiles = img_size / tile_size;
 
-        for tile_y in 0..num_tiles.y {
-            let outer_row =
-                tile_y as usize * img_size.x as usize * pixel_size * tile_size.y as usize;
+        let tile_stride = tile_size.x as usize * pixel_size;
+        let row_stride = tile_size.y as usize * tile_stride;
 
-            for tile_x in 0..num_tiles.x {
-                for y in (0..tile_size.y).rev() {
-                    let inner_row = y as usize * img_size.x as usize * pixel_size;
-                    let col_in_row = tile_size_in_pixels * tile_x as usize;
-                    let copy_start = outer_row + inner_row + col_in_row;
+        for (idx, dest_chunk) in dest.chunks_exact_mut(tile_stride).enumerate() {
+            let x = (idx / tile_size.y as usize) % tile_size.x as usize;
+            let sub_tile_y = (tile_size.y - 1) as usize - (idx % tile_size.y as usize);
+            let y = idx / (tile_size.y * tile_size.x) as usize;
 
-                    dest.extend(&img[copy_start..(copy_start + tile_size_in_pixels)]);
-                }
-            }
+            let src_start = (y * tile_size.y as usize * row_stride)
+                + (row_stride * sub_tile_y)
+                + (x * tile_stride);
+            let src_end = src_start + tile_stride;
+
+            dest_chunk.copy_from_slice(&src[src_start..src_end]);
         }
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct GpuTileSheet {
     pub bind_group: BindGroup,
 }
@@ -126,18 +123,14 @@ impl RenderAsset for TileSheet {
     }
 
     fn prepare_asset(
-        mut tile_sheet: Self::ExtractedAsset,
+        tile_sheet: Self::ExtractedAsset,
         (render_device, render_queue, tile_map_pipeline): &mut SystemParamItem<Self::Param>,
     ) -> Result<Self::PreparedAsset, PrepareAssetError<Self::ExtractedAsset>> {
-        let fixed_idx = 0; // TODO: very temporary. Only loading the first image
-
-        let (data, size, format) = if let Some(tile_data) = &tile_sheet.tile_data.get(fixed_idx) {
-            tile_data
+        let format = if let Some(format) = tile_sheet.format {
+            format
         } else {
             return Err(PrepareAssetError::RetryNextUpdate(tile_sheet));
         };
-        let array_count = (size.width * size.height * size.depth_or_array_layers)
-            / (tile_sheet.tile_size.x * tile_sheet.tile_size.y);
 
         let texture = render_device.create_texture_with_data(
             render_queue,
@@ -146,15 +139,15 @@ impl RenderAsset for TileSheet {
                 size: Extent3d {
                     width: tile_sheet.tile_size.x,
                     height: tile_sheet.tile_size.y,
-                    depth_or_array_layers: array_count,
+                    depth_or_array_layers: tile_sheet.array_count,
                 },
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: TextureDimension::D2,
-                format: *format,
+                format: format,
                 usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
             },
-            data.as_slice(),
+            &tile_sheet.tile_data,
         );
 
         let sampler = render_device.create_sampler(&SamplerDescriptor {
@@ -174,36 +167,24 @@ impl RenderAsset for TileSheet {
 
         let texture_view = texture.create_view(&TextureViewDescriptor {
             label: Some("TileSheet::TextureView"),
-            format: Some(*format),
+            format: Some(format),
             dimension: Some(TextureViewDimension::D2Array),
             aspect: TextureAspect::All,
             base_mip_level: 0,
             mip_level_count: None,
             base_array_layer: 0,
-            array_layer_count: NonZeroU32::new(array_count),
-        });
-
-        tile_sheet.gpu_image = Some(GpuImage {
-            texture_format: *format,
-            texture,
-            sampler,
-            texture_view,
-            size: Size::new(tile_sheet.tile_size.x as f32, tile_sheet.tile_size.y as f32),
+            array_layer_count: NonZeroU32::new(tile_sheet.array_count),
         });
 
         let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(
-                        &tile_sheet.gpu_image.as_ref().unwrap().texture_view,
-                    ),
+                    resource: BindingResource::TextureView(&texture_view),
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::Sampler(
-                        &tile_sheet.gpu_image.as_ref().unwrap().sampler,
-                    ),
+                    resource: BindingResource::Sampler(&sampler),
                 },
             ],
             label: Some("TileMap::TileSheet::BindGroup"),
