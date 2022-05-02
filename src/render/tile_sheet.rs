@@ -42,9 +42,9 @@ impl TileSheet {
         images: &Assets<Image>,
         updated_images: &HashSet<Handle<Image>>,
     ) {
+        // TODO: very temporary. Only loading the first image
         for (idx, image_handle) in self.tile_sets.iter().enumerate() {
             if updated_images.contains(image_handle) {
-                println!("Updating Image");
                 if let Some(img) = images.get(image_handle) {
                     if let Some((data, layers, format)) = self.tile_data.get_mut(idx) {
                         data.clear();
