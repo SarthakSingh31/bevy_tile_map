@@ -56,6 +56,12 @@ impl TileMap {
         }
     }
 
+    /// SAFETY: Does not mark the chunk as dirty. Does not do bound checks. So you need to do both yourself.
+    pub unsafe fn get_mut_unchecked(&mut self, coord: UVec3) -> &mut Option<Tile> {
+        let index = self.coord_to_tile_idx(coord.truncate());
+        &mut self.tiles[coord.z as usize][index]
+    }
+
     pub fn add_empty_layer(&mut self) -> u32 {
         self.size.z += 1;
         self.mark_all_chunks_dirty();
@@ -94,11 +100,11 @@ impl TileMap {
         ChunkCoord((coord.truncate() / self.chunk_size).extend(coord.z))
     }
 
-    fn mark_chunk_dirty(&mut self, coord: UVec3) {
+    pub fn mark_chunk_dirty(&mut self, coord: UVec3) {
         self.dirty_chunks.insert(self.coord_to_chunk_coord(coord));
     }
 
-    fn mark_all_chunks_dirty(&mut self) {
+    pub fn mark_all_chunks_dirty(&mut self) {
         self.dirty_chunks.extend(self.chunks());
     }
 }
@@ -107,7 +113,6 @@ impl Index<UVec3> for TileMap {
     type Output = Option<Tile>;
 
     fn index(&self, coord: UVec3) -> &Self::Output {
-        assert!(coord.x < self.size.x && coord.y < self.size.y);
         let index = self.coord_to_tile_idx(coord.truncate());
         &self.tiles[coord.z as usize][index]
     }
@@ -115,7 +120,6 @@ impl Index<UVec3> for TileMap {
 
 impl IndexMut<UVec3> for TileMap {
     fn index_mut(&mut self, coord: UVec3) -> &mut Self::Output {
-        assert!(coord.x < self.size.x && coord.y < self.size.y);
         self.mark_chunk_dirty(coord);
 
         let index = self.coord_to_tile_idx(coord.truncate());

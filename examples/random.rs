@@ -26,7 +26,7 @@ fn setup(
     ));
 
     let mut tile_map = TileMap::new(
-        UVec2::new(1000, 1000),
+        UVec2::new(1024, 1024),
         UVec2::new(128, 128),
         UVec2::new(16, 16),
         tile_sheet,
@@ -44,9 +44,15 @@ fn setup(
 
     commands.spawn_bundle(TileMapBundle {
         tile_map,
+        transform: TransformBundle {
+            local: Transform::from_translation(Vec3::new(-512.0, -512.0, 0.0) * 16.0),
+            ..Default::default()
+        },
         ..Default::default()
     });
-    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+    let mut camera = OrthographicCameraBundle::new_2d();
+    camera.orthographic_projection.scale = 25.0;
+    commands.spawn_bundle(camera);
 }
 
 pub struct TileSwitchTimer(Timer);
@@ -68,11 +74,12 @@ fn switch_tiles_to_random(
         for mut tile_map in tile_maps.iter_mut() {
             for x in 0..tile_map.size.x {
                 for y in 0..tile_map.size.x {
-                    if let Some(tile) = &mut tile_map[(x, y, 0)] {
+                    if let Some(tile) = unsafe { tile_map.get_mut_unchecked(UVec3::new(x, y, 0)) } {
                         tile.idx = rng.gen_range(0..256);
                     }
                 }
             }
+            tile_map.mark_all_chunks_dirty();
         }
     }
 }

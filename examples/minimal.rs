@@ -25,7 +25,7 @@ fn setup(
     ));
 
     let mut tile_map = TileMap::new(
-        UVec2::new(1000, 1000),
+        UVec2::new(1024, 1024),
         UVec2::new(128, 128),
         UVec2::new(16, 16),
         tile_sheet,
