@@ -8,7 +8,11 @@ pub fn update_camera_ray(
     images: Res<Assets<Image>>,
     mut ray_sources: Query<(&mut TileMapRayCastSource, &Camera, &GlobalTransform)>,
 ) {
-    let window = windows.get_primary().unwrap();
+    let window = if let Some(window) = windows.get_primary() {
+        window
+    } else {
+        return;
+    };
 
     for (mut source, camera, camera_transform) in ray_sources.iter_mut() {
         if let Some(cursor_pos) = window.cursor_position() {
@@ -39,7 +43,11 @@ pub fn queue_interaction_events(
     ray_source: Query<&TileMapRayCastSource>,
     chunks: Query<(&ChunkData, &Parent)>,
 ) {
-    let source = ray_source.single();
+    let source = if let Ok(source) = ray_source.get_single() {
+        source
+    } else {
+        return;
+    };
 
     let mut new_selected = None;
     if let Some(intersections) = source.intersect_list() {
