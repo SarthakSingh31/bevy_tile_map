@@ -1,6 +1,13 @@
-use bevy::{prelude::*, render::primitives::Aabb, utils::HashMap};
+use bevy::{
+    prelude::*,
+    render::{
+        mesh::{Indices, PrimitiveTopology},
+        primitives::Aabb,
+    },
+    utils::HashMap,
+};
 
-use crate::{Tile, TileMap, TileSheet};
+use crate::{interaction::TileMapRayCastMesh, Tile, TileMap, TileSheet};
 
 #[derive(Debug, Default, Component, Clone, Copy, Deref, DerefMut, PartialEq, Eq, Hash)]
 pub struct ChunkCoord(pub UVec3);
@@ -8,20 +15,24 @@ pub struct ChunkCoord(pub UVec3);
 #[derive(Debug, Default, Component, Deref, DerefMut)]
 pub struct ChunkEntities(HashMap<ChunkCoord, Entity>);
 
-#[derive(Debug, Default, Bundle)]
+#[derive(Default, Bundle)]
 pub struct ChunkBundle {
     data: ChunkData,
+    mesh: Handle<Mesh>,
     aabb: Aabb,
     #[bundle]
     transform: TransformBundle,
     visibility: Visibility,
     computed_visibility: ComputedVisibility,
+    picking: TileMapRayCastMesh,
 }
 
 pub fn generate_or_update_chunks(
+    mut mesh_cache: Local<HashMap<UVec2, (Aabb, Handle<Mesh>)>>,
     mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
     mut tile_maps: Query<(Entity, &mut ChunkEntities, &mut TileMap)>,
-    mut chunk_meshs: Query<(&mut Aabb, &mut ChunkData), Without<TileMap>>,
+    mut chunk_meshs: Query<(&mut Aabb, &mut Handle<Mesh>, &mut ChunkData), Without<TileMap>>,
 ) {
     for (entity, mut chunk_entities, mut tile_map) in tile_maps.iter_mut() {
         if tile_map.dirty_chunks.len() == 0 {
@@ -29,36 +40,38 @@ pub fn generate_or_update_chunks(
         }
 
         let screen_chunk_size = tile_map.chunk_size * tile_map.tile_size;
-        let computed_aabb = Aabb::from_min_max(Vec3::ZERO, screen_chunk_size.extend(0).as_vec3());
+        let (new_aabb, new_mesh) = mesh_cache.entry(screen_chunk_size).or_insert_with(|| {
+            let mesh = plane_mesh(screen_chunk_size.as_vec2());
+            let aabb = mesh.compute_aabb().unwrap();
+            (aabb, meshes.add(mesh))
+        });
 
         for chunk_coord in tile_map.dirty_chunks.drain().collect::<Vec<_>>() {
             if let Some(chunk) = chunk_entities.get(&chunk_coord) {
-                let (mut aabb, mut chunk_data) = chunk_meshs
+                let (mut aabb, mut mesh, mut chunk_data) = chunk_meshs
                     .get_mut(*chunk)
                     .expect("A chunk for a tile map is missing");
 
-                *aabb = computed_aabb.clone();
+                *aabb = new_aabb.clone();
+                *mesh = new_mesh.as_weak();
                 chunk_data.sync(&tile_map);
             } else {
                 commands.entity(entity).with_children(|child_builder| {
-                    let entity = child_builder
-                        .spawn_bundle(ChunkBundle {
-                            aabb: computed_aabb.clone(),
-                            data: ChunkData::new(
-                                chunk_coord,
-                                &tile_map,
-                                tile_map.tile_sheet.as_weak(),
+                    #[allow(unused_mut)]
+                    let mut entity_commands = child_builder.spawn_bundle(ChunkBundle {
+                        mesh: new_mesh.as_weak(),
+                        aabb: new_aabb.clone(),
+                        data: ChunkData::new(chunk_coord, &tile_map, tile_map.tile_sheet.as_weak()),
+                        transform: TransformBundle {
+                            local: Transform::from_translation(
+                                (chunk_coord.0 * screen_chunk_size.extend(1)).as_vec3(),
                             ),
-                            transform: TransformBundle {
-                                local: Transform::from_translation(
-                                    (chunk_coord.0 * screen_chunk_size.extend(1)).as_vec3(),
-                                ),
-                                ..Default::default()
-                            },
                             ..Default::default()
-                        })
-                        .id();
-                    chunk_entities.insert(chunk_coord, entity);
+                        },
+                        ..Default::default()
+                    });
+
+                    chunk_entities.insert(chunk_coord, entity_commands.id());
                 });
             }
         }
@@ -67,11 +80,11 @@ pub fn generate_or_update_chunks(
 
 #[derive(Debug, Default, Component, Clone)]
 pub struct ChunkData {
-    tiles: Vec<Option<Tile>>,
-    chunk_coord: ChunkCoord,
-    chunk_size: UVec2,
-    tile_size: UVec2,
-    tile_sheet: Handle<TileSheet>,
+    pub(crate) tiles: Vec<Option<Tile>>,
+    pub(crate) chunk_coord: ChunkCoord,
+    pub(crate) chunk_size: UVec2,
+    pub(crate) tile_size: UVec2,
+    pub(crate) tile_sheet: Handle<TileSheet>,
 }
 
 impl ChunkData {
@@ -147,4 +160,31 @@ impl ChunkData {
     pub fn tile_sheet(&self) -> &Handle<TileSheet> {
         &self.tile_sheet
     }
+}
+
+pub fn plane_mesh(size: Vec2) -> Mesh {
+    let vertices = [
+        ([0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0]),
+        ([0.0, size.y, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0]),
+        ([size.x, size.y, 0.0], [0.0, 0.0, 1.0], [1.0, 1.0]),
+        ([size.x, 0.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0]),
+    ];
+
+    let indices = Indices::U16(vec![0, 2, 1, 0, 3, 2]);
+
+    let mut positions = Vec::new();
+    let mut normals = Vec::new();
+    let mut uvs = Vec::new();
+    for (position, normal, uv) in &vertices {
+        positions.push(*position);
+        normals.push(*normal);
+        uvs.push(*uv);
+    }
+
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+    mesh.set_indices(Some(indices));
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh
 }

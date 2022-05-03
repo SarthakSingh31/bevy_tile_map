@@ -1,4 +1,5 @@
 mod chunk;
+mod interaction;
 mod render;
 mod tile_map;
 
@@ -13,6 +14,9 @@ use bevy::{
     },
 };
 
+use bevy_mod_raycast::RaycastSystem;
+
+pub use interaction::{TileMapInteractionEvent, TileMapRayCastSource};
 pub use render::TileSheet;
 pub use tile_map::*;
 
@@ -20,12 +24,22 @@ pub struct TileMapPlugin;
 
 impl Plugin for TileMapPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(RenderAssetPlugin::<TileSheet>::with_prepare_asset_label(
-            PrepareAssetLabel::PreAssetPrepare,
-        ))
-        .add_asset::<TileSheet>()
-        .init_resource::<render::ChunkShader>()
-        .add_system(chunk::generate_or_update_chunks);
+        app.init_resource::<render::ChunkShader>()
+            .add_plugin(RenderAssetPlugin::<TileSheet>::with_prepare_asset_label(
+                PrepareAssetLabel::PreAssetPrepare,
+            ))
+            .add_asset::<TileSheet>()
+            .add_event::<TileMapInteractionEvent>()
+            .add_plugin(interaction::TileMapRayCastPlugin::default())
+            .add_system_to_stage(
+                CoreStage::PreUpdate,
+                interaction::update_camera_ray.before(RaycastSystem::BuildRays),
+            )
+            .add_system_to_stage(
+                CoreStage::PreUpdate,
+                interaction::queue_interaction_events.after(RaycastSystem::UpdateRaycast),
+            )
+            .add_system(chunk::generate_or_update_chunks);
 
         let shader = app
             .world
@@ -49,14 +63,5 @@ impl Plugin for TileMapPlugin {
 
     fn name(&self) -> &str {
         "Tilemap Plugin"
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
     }
 }
