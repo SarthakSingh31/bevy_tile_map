@@ -265,7 +265,7 @@ impl From<&Tile> for TileUniform {
             Tile::Color(color) => TileUniform {
                 idx: -1,
                 transform: Mat4::IDENTITY,
-                mask_color: color.as_linear_rgba_f32(),
+                mask_color: color.as_rgba_f32(),
             },
             Tile::Sprite {
                 idx,
@@ -274,7 +274,7 @@ impl From<&Tile> for TileUniform {
             } => TileUniform {
                 idx: *idx as i32,
                 transform: transform.into(),
-                mask_color: mask_color.as_linear_rgba_f32(),
+                mask_color: mask_color.as_rgba_f32(),
             },
             Tile::None => TileUniform::DISCARD,
         }
