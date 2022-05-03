@@ -33,7 +33,10 @@ fn setup(
 
     for x in 0..tile_map.size.x {
         for y in 0..tile_map.size.y {
-            tile_map[(x, y, 0)] = Some(Tile { idx: 0 });
+            tile_map[(x, y, 0)] = Some(Tile {
+                idx: 0,
+                ..Default::default()
+            });
         }
     }
 

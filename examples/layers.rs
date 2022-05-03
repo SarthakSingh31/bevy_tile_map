@@ -42,6 +42,7 @@ fn setup(
             for y in 0..tile_map.size.y {
                 tile_map[(x, y, layer)] = Some(Tile {
                     idx: rng.gen_range(0..512),
+                    ..Default::default()
                 });
             }
         }

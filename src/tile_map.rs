@@ -156,9 +156,83 @@ impl IndexMut<[u32; 3]> for TileMap {
 }
 
 #[derive(Debug, Clone, Copy)]
-#[repr(transparent)]
 pub struct Tile {
     pub idx: u16,
+    pub transform: TileTransform,
+    pub mask_color: Color,
+}
+
+impl Default for Tile {
+    fn default() -> Self {
+        Self {
+            idx: 0,
+            transform: TileTransform::default(),
+            mask_color: Color::WHITE,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TileTransform {
+    pub translation: Vec2,
+    pub angle: f32,
+    pub scale: Vec2,
+}
+
+impl TileTransform {
+    pub fn recenter(&self) -> Self {
+        let current: Mat3 = self.clone().into();
+        let offset = current.transform_point2(Vec2::new(0.5, 0.5));
+
+        // println!(
+        //     "Old point: {} will be translated to: {}",
+        //     Vec2::ONE,
+        //     current.transform_point2(Vec2::ONE)
+        // );
+        // println!(
+        //     "Old point: {} will be translated to: {}",
+        //     Vec2::ZERO,
+        //     current.transform_point2(Vec2::ZERO)
+        // );
+        // println!(
+        //     "Old point: {} will be translated to: {}",
+        //     Vec2::new(1.0, 0.0),
+        //     current.transform_point2(Vec2::new(1.0, 0.0))
+        // );
+        // println!(
+        //     "Old point: {} will be translated to: {}",
+        //     Vec2::new(0.0, 1.0),
+        //     current.transform_point2(Vec2::new(0.0, 1.0))
+        // );
+
+        Self {
+            translation: self.translation - (Vec2::new(0.5, 0.5) - offset),
+            angle: self.angle,
+            scale: self.scale,
+        }
+    }
+}
+
+impl Default for TileTransform {
+    fn default() -> Self {
+        TileTransform {
+            translation: Vec2::ZERO,
+            angle: 0.0,
+            scale: Vec2::ONE,
+        }
+    }
+}
+
+impl Into<Mat3> for TileTransform {
+    fn into(self) -> Mat3 {
+        Mat3::from_scale_angle_translation(Vec2::ONE / self.scale, self.angle, -self.translation)
+    }
+}
+
+impl Into<Mat4> for TileTransform {
+    fn into(self) -> Mat4 {
+        Mat4::from_mat3(self.into())
+    }
 }
 
 #[derive(Default, Bundle)]

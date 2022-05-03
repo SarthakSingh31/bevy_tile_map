@@ -53,7 +53,7 @@ impl Plugin for TileMapPlugin {
                 .init_resource::<SpecializedRenderPipelines<render::TileMapPipeline>>()
                 .init_resource::<render::TileMapMeta>()
                 .init_resource::<render::ExtractedChunks>()
-                .init_resource::<render::TileUniform>()
+                .init_resource::<render::TileUniforms>()
                 .add_render_command::<Transparent2d, render::DrawChunk>()
                 .add_system_to_stage(RenderStage::Extract, render::extract_chunks)
                 .add_system_to_stage(RenderStage::Prepare, render::prepare_tiles)

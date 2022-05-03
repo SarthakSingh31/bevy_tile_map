@@ -5,12 +5,6 @@ struct View {
 [[group(0), binding(0)]]
 var<uniform> view: View;
 
-struct Tiles {
-    data: array<i32>;
-};
-[[group(1), binding(0)]]
-var<storage, read> tiles: Tiles;
-
 struct Transform {
     [[location(0)]] row_0: vec4<f32>;
     [[location(1)]] row_1: vec4<f32>;
@@ -26,7 +20,7 @@ struct Chunk {
 struct VertexOutput {
     [[builtin(position)]] position: vec4<f32>;
     [[location(0)]] uv: vec2<f32>;
-    [[location(1)]] index: i32;
+    [[location(1)]] tile_index: u32;
 };
 
 [[stage(vertex)]]
@@ -49,10 +43,22 @@ fn vertex([[builtin(vertex_index)]] index: u32, transform: Transform, chunk: Chu
     var out: VertexOutput;
     out.position = view.view_proj * world_position;
     out.uv = vec2<f32>(corner_position);
-    out.index = tiles.data[tile_index];
+    out.tile_index = tile_index;
 
     return out;
 }
+
+struct Tile {
+    idx: i32;
+    transform: mat4x4<f32>;
+    mask_color: vec4<f32>;
+};
+
+struct Tiles {
+    data: array<Tile>;
+};
+[[group(1), binding(0)]]
+var<storage, read> tiles: Tiles;
 
 [[group(2), binding(0)]]
 var texture_array: texture_2d_array<f32>;
@@ -61,11 +67,14 @@ var texture_sampler: sampler;
 
 [[stage(fragment)]]
 fn fragment(in: VertexOutput) -> [[location(0)]] vec4<f32> {
-    let color = textureSample(texture_array, texture_sampler, in.uv, in.index);
+    let tile = tiles.data[in.tile_index];
 
-    if (in.index < 0) {
+    let uv = tile.transform * vec4<f32>(in.uv, 1.0, 1.0);
+    let color = textureSample(texture_array, texture_sampler, uv.xy, tile.idx);
+
+    if (tile.idx < 0 || uv.x > 1.0 || uv.x < 0.0 || uv.y > 1.0 || uv.y < 0.0) {
         discard;
     }
 
-    return color;
+    return color * tile.mask_color;
 }

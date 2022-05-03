@@ -13,7 +13,7 @@ use bevy::{
     render::{
         render_asset::RenderAssets,
         render_phase::*,
-        render_resource::{std140::AsStd140, *},
+        render_resource::{std140::AsStd140, std430::AsStd430, *},
         renderer::{RenderDevice, RenderQueue},
         texture::BevyDefault,
         view::{ViewUniform, ViewUniformOffset, ViewUniforms},
@@ -67,11 +67,11 @@ impl FromWorld for TileMapPipeline {
         let tiles_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             entries: &[BindGroupLayoutEntry {
                 binding: 0,
-                visibility: ShaderStages::VERTEX,
+                visibility: ShaderStages::FRAGMENT,
                 ty: BindingType::Buffer {
                     ty: BufferBindingType::Storage { read_only: true },
                     has_dynamic_offset: false,
-                    min_binding_size: BufferSize::new(i32::std140_size_static() as u64),
+                    min_binding_size: BufferSize::new(TileUniform::std430_size_static() as u64),
                 },
                 count: None,
             }],
@@ -241,8 +241,36 @@ pub fn extract_chunks(
     }
 }
 
+#[derive(Clone, Copy, AsStd430)]
+#[repr(C)]
+pub struct TileUniform {
+    idx: i32,
+    // FIXME: When using Mat3 it tries to write Mat4. It might be due to bugs with some drivers?
+    //        just using Mat4 for now due to it.
+    transform: Mat4,
+    mask_color: [f32; 4],
+}
+
+impl TileUniform {
+    const DISCARD: TileUniform = TileUniform {
+        idx: -1,
+        transform: Mat4::IDENTITY,
+        mask_color: [1.0; 4],
+    };
+}
+
+impl From<&Tile> for TileUniform {
+    fn from(tile: &Tile) -> Self {
+        TileUniform {
+            idx: tile.idx as i32,
+            transform: tile.transform.into(),
+            mask_color: tile.mask_color.into(),
+        }
+    }
+}
+
 #[derive(Default)]
-pub struct TileUniform(HashMap<usize, StorageBuffer<i32>>);
+pub struct TileUniforms(HashMap<usize, StorageBuffer<TileUniform>>);
 
 #[derive(Component)]
 pub struct TilesBindGroup(BindGroup);
@@ -251,7 +279,7 @@ pub fn prepare_tiles(
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
     mut extracted_chunks: ResMut<ExtractedChunks>,
-    mut tile_uniforms: ResMut<TileUniform>,
+    mut tile_uniforms: ResMut<TileUniforms>,
 ) {
     extracted_chunks.chunks.sort_by(|a, b| {
         match a
@@ -280,9 +308,9 @@ pub fn prepare_tiles(
         };
         for tile in &chunk.data {
             if let Some(tile) = tile {
-                buffer.push(tile.idx as i32);
+                buffer.push(tile.into());
             } else {
-                buffer.push(-1);
+                buffer.push(TileUniform::DISCARD);
             }
         }
         buffer.write_buffer(&render_device, &render_queue);
@@ -350,7 +378,7 @@ pub fn queue_chunks(
     tile_map_pipeline: Res<TileMapPipeline>,
     msaa: Res<Msaa>,
     extracted_chunks: Res<ExtractedChunks>,
-    tile_uniforms: Res<TileUniform>,
+    tile_uniforms: Res<TileUniforms>,
     mut pipelines: ResMut<SpecializedRenderPipelines<TileMapPipeline>>,
     mut pipeline_cache: ResMut<PipelineCache>,
     mut views: Query<&mut RenderPhase<Transparent2d>>,
