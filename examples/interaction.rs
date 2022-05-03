@@ -41,7 +41,7 @@ fn setup(
         for y in 0..tile_map.size.y {
             if rng.gen_bool(0.3) {
                 tile_map[(x, y, 0)] = Some(Tile {
-                    idx: 364,
+                    idx: Some(364),
                     ..Default::default()
                 });
             }
@@ -53,7 +53,7 @@ fn setup(
         for y in 0..tile_map.size.y {
             if rng.gen_bool(0.3) {
                 tile_map[(x, y, 1)] = Some(Tile {
-                    idx: 255,
+                    idx: Some(255),
                     ..Default::default()
                 });
             }

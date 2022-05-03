@@ -1,5 +1,5 @@
 use bevy::{diagnostic, input::mouse::MouseWheel, prelude::*};
-use bevy_tile_map::{Tile, TileMap, TileMapBundle, TileMapPlugin, TileSheet};
+use bevy_tile_map::{Tile, TileMap, TileMapBundle, TileMapPlugin, TileMapRayCastSource, TileSheet};
 use rand::prelude::*;
 
 fn main() {
@@ -10,7 +10,6 @@ fn main() {
         .add_plugin(diagnostic::LogDiagnosticsPlugin::default())
         .add_plugin(TileMapPlugin)
         .add_startup_system(setup)
-        .add_system(switch_tiles_to_random)
         .add_system(control_camera)
         .run();
 }
@@ -21,13 +20,16 @@ fn setup(
     mut tile_sheets: ResMut<Assets<TileSheet>>,
 ) {
     let tile_sheet = tile_sheets.add(TileSheet::new(
-        vec![asset_server.load("0x72_16x16DungeonTileset.v4.png")],
+        vec![
+            asset_server.load("0x72_16x16DungeonTileset.v4.png"),
+            asset_server.load("0x72_16x16DungeonTileset_walls.v2.png"),
+        ],
         UVec2::new(16, 16),
     ));
 
     let mut tile_map = TileMap::new(
-        UVec2::new(1024, 1024),
-        UVec2::new(128, 128),
+        UVec2::new(256, 256),
+        UVec2::new(32, 32),
         UVec2::new(16, 16),
         tile_sheet,
     );
@@ -37,52 +39,33 @@ fn setup(
     for x in 0..tile_map.size.x {
         for y in 0..tile_map.size.y {
             tile_map[(x, y, 0)] = Some(Tile {
-                idx: Some(rng.gen_range(0..256)),
+                idx: None,
+                mask_color: Color::rgba_u8(rng.gen(), rng.gen(), rng.gen(), rng.gen()),
                 ..Default::default()
             });
         }
     }
 
-    commands.spawn_bundle(TileMapBundle {
-        tile_map,
-        transform: TransformBundle {
-            local: Transform::from_translation(Vec3::new(-512.0, -512.0, 0.0) * 16.0),
-            ..Default::default()
-        },
-        ..Default::default()
-    });
-    let mut camera = OrthographicCameraBundle::new_2d();
-    camera.orthographic_projection.scale = 25.0;
-    commands.spawn_bundle(camera);
-}
-
-pub struct TileSwitchTimer(Timer);
-
-impl Default for TileSwitchTimer {
-    fn default() -> Self {
-        TileSwitchTimer(Timer::new(std::time::Duration::from_millis(100), true))
-    }
-}
-
-fn switch_tiles_to_random(
-    mut timer: Local<TileSwitchTimer>,
-    time: Res<Time>,
-    mut tile_maps: Query<&mut TileMap>,
-) {
-    if timer.0.tick(time.delta()).just_finished() {
-        let mut rng = thread_rng();
-
-        for mut tile_map in tile_maps.iter_mut() {
-            for x in 0..tile_map.size.x {
-                for y in 0..tile_map.size.x {
-                    if let Some(tile) = unsafe { tile_map.get_mut_unchecked(UVec3::new(x, y, 0)) } {
-                        tile.idx = Some(rng.gen_range(0..256));
-                    }
-                }
+    tile_map.add_empty_layer();
+    for x in 0..tile_map.size.x {
+        for y in 0..tile_map.size.y {
+            if rng.gen_bool(0.3) {
+                tile_map[(x, y, 1)] = Some(Tile {
+                    idx: Some(255),
+                    ..Default::default()
+                });
             }
-            tile_map.mark_all_chunks_dirty();
         }
     }
+
+    commands.spawn_bundle(TileMapBundle {
+        tile_map,
+        ..Default::default()
+    });
+
+    commands
+        .spawn_bundle(OrthographicCameraBundle::new_2d())
+        .insert(TileMapRayCastSource::default());
 }
 
 fn control_camera(

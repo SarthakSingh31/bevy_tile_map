@@ -85,7 +85,7 @@ impl FromWorld for TileMapPipeline {
                         binding: 0,
                         visibility: ShaderStages::FRAGMENT,
                         ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: false },
+                            sample_type: TextureSampleType::Float { filterable: true },
                             view_dimension: TextureViewDimension::D2Array,
                             multisampled: false,
                         },
@@ -94,7 +94,7 @@ impl FromWorld for TileMapPipeline {
                     BindGroupLayoutEntry {
                         binding: 1,
                         visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
                         count: None,
                     },
                 ],
@@ -253,7 +253,7 @@ pub struct TileUniform {
 
 impl TileUniform {
     const DISCARD: TileUniform = TileUniform {
-        idx: -1,
+        idx: -2,
         transform: Mat4::IDENTITY,
         mask_color: [1.0; 4],
     };
@@ -262,7 +262,7 @@ impl TileUniform {
 impl From<&Tile> for TileUniform {
     fn from(tile: &Tile) -> Self {
         TileUniform {
-            idx: tile.idx as i32,
+            idx: tile.idx.map(|idx| idx as i32).unwrap_or(-1),
             transform: tile.transform.into(),
             mask_color: tile.mask_color.into(),
         }

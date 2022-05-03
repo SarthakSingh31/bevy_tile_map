@@ -41,7 +41,7 @@ fn setup(
         for x in 0..tile_map.size.x {
             for y in 0..tile_map.size.y {
                 tile_map[(x, y, layer)] = Some(Tile {
-                    idx: rng.gen_range(0..512),
+                    idx: Some(rng.gen_range(0..512)),
                     ..Default::default()
                 });
             }
@@ -65,7 +65,7 @@ fn switch_to_next_texture(input: Res<Input<KeyCode>>, mut tile_maps: Query<&mut 
                 for x in 0..tile_map.size.x {
                     for y in 0..tile_map.size.x {
                         if let Some(tile) = &mut tile_map[(x, y, layer)] {
-                            tile.idx = rng.gen_range(0..512);
+                            tile.idx = Some(rng.gen_range(0..512));
                         }
                     }
                 }

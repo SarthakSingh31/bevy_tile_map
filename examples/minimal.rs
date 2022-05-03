@@ -34,7 +34,7 @@ fn setup(
     for x in 0..tile_map.size.x {
         for y in 0..tile_map.size.y {
             tile_map[(x, y, 0)] = Some(Tile {
-                idx: 0,
+                idx: Some(0),
                 ..Default::default()
             });
         }
@@ -66,7 +66,9 @@ fn switch_to_next_texture(input: Res<Input<KeyCode>>, mut tile_maps: Query<&mut 
                 for x in 0..tile_map.size.x {
                     for y in 0..tile_map.size.x {
                         if let Some(tile) = &mut tile_map[(x, y, layer)] {
-                            tile.idx = (tile.idx as i32 + direction).clamp(0, 256) as u16;
+                            tile.idx = tile
+                                .idx
+                                .map(|idx| (idx as i32 + direction).clamp(0, 256) as u16);
                         }
                     }
                 }

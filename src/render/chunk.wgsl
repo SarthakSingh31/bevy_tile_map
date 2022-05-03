@@ -72,7 +72,11 @@ fn fragment(in: VertexOutput) -> [[location(0)]] vec4<f32> {
     let uv = tile.transform * vec4<f32>(in.uv, 1.0, 1.0);
     let color = textureSample(texture_array, texture_sampler, uv.xy, tile.idx);
 
-    if (tile.idx < 0 || uv.x > 1.0 || uv.x < 0.0 || uv.y > 1.0 || uv.y < 0.0) {
+    if (tile.idx == -1) {
+        return tile.mask_color;
+    }
+
+    if (tile.idx == -2 || uv.x > 1.0 || uv.x < 0.0 || uv.y > 1.0 || uv.y < 0.0) {
         discard;
     }
 

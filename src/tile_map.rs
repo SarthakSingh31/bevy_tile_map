@@ -79,10 +79,12 @@ impl TileMap {
         self.tiles.len() as u32 - 1
     }
 
+    #[inline]
     pub fn size(&self) -> UVec3 {
         self.size
     }
 
+    #[inline]
     pub fn chunks(&self) -> impl IntoIterator<Item = ChunkCoord> {
         let max = self.coord_to_chunk_coord(self.size).0;
 
@@ -92,18 +94,22 @@ impl TileMap {
             .map(|coord| ChunkCoord(coord))
     }
 
+    #[inline]
     pub(crate) fn coord_to_tile_idx(&self, index: UVec2) -> usize {
         (index.y * self.size.x + index.x) as usize
     }
 
+    #[inline]
     pub(crate) fn coord_to_chunk_coord(&self, coord: UVec3) -> ChunkCoord {
         ChunkCoord((coord.truncate() / self.chunk_size).extend(coord.z))
     }
 
+    #[inline]
     pub fn mark_chunk_dirty(&mut self, coord: UVec3) {
         self.dirty_chunks.insert(self.coord_to_chunk_coord(coord));
     }
 
+    #[inline]
     pub fn mark_all_chunks_dirty(&mut self) {
         self.dirty_chunks.extend(self.chunks());
     }
@@ -112,6 +118,7 @@ impl TileMap {
 impl Index<UVec3> for TileMap {
     type Output = Option<Tile>;
 
+    #[inline]
     fn index(&self, coord: UVec3) -> &Self::Output {
         let index = self.coord_to_tile_idx(coord.truncate());
         &self.tiles[coord.z as usize][index]
@@ -119,6 +126,7 @@ impl Index<UVec3> for TileMap {
 }
 
 impl IndexMut<UVec3> for TileMap {
+    #[inline]
     fn index_mut(&mut self, coord: UVec3) -> &mut Self::Output {
         self.mark_chunk_dirty(coord);
 
@@ -130,12 +138,14 @@ impl IndexMut<UVec3> for TileMap {
 impl Index<(u32, u32, u32)> for TileMap {
     type Output = Option<Tile>;
 
+    #[inline]
     fn index(&self, coord: (u32, u32, u32)) -> &Self::Output {
         &self[UVec3::from(coord)]
     }
 }
 
 impl IndexMut<(u32, u32, u32)> for TileMap {
+    #[inline]
     fn index_mut(&mut self, coord: (u32, u32, u32)) -> &mut Self::Output {
         &mut self[UVec3::from(coord)]
     }
@@ -144,12 +154,14 @@ impl IndexMut<(u32, u32, u32)> for TileMap {
 impl Index<[u32; 3]> for TileMap {
     type Output = Option<Tile>;
 
+    #[inline]
     fn index(&self, coord: [u32; 3]) -> &Self::Output {
         &self[UVec3::from(coord)]
     }
 }
 
 impl IndexMut<[u32; 3]> for TileMap {
+    #[inline]
     fn index_mut(&mut self, coord: [u32; 3]) -> &mut Self::Output {
         &mut self[UVec3::from(coord)]
     }
@@ -157,7 +169,7 @@ impl IndexMut<[u32; 3]> for TileMap {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Tile {
-    pub idx: u16,
+    pub idx: Option<u16>,
     pub transform: TileTransform,
     pub mask_color: Color,
 }
@@ -165,7 +177,7 @@ pub struct Tile {
 impl Default for Tile {
     fn default() -> Self {
         Self {
-            idx: 0,
+            idx: None,
             transform: TileTransform::default(),
             mask_color: Color::WHITE,
         }
@@ -183,27 +195,6 @@ impl TileTransform {
     pub fn recenter(&self) -> Self {
         let current: Mat3 = self.clone().into();
         let offset = current.transform_point2(Vec2::new(0.5, 0.5));
-
-        // println!(
-        //     "Old point: {} will be translated to: {}",
-        //     Vec2::ONE,
-        //     current.transform_point2(Vec2::ONE)
-        // );
-        // println!(
-        //     "Old point: {} will be translated to: {}",
-        //     Vec2::ZERO,
-        //     current.transform_point2(Vec2::ZERO)
-        // );
-        // println!(
-        //     "Old point: {} will be translated to: {}",
-        //     Vec2::new(1.0, 0.0),
-        //     current.transform_point2(Vec2::new(1.0, 0.0))
-        // );
-        // println!(
-        //     "Old point: {} will be translated to: {}",
-        //     Vec2::new(0.0, 1.0),
-        //     current.transform_point2(Vec2::new(0.0, 1.0))
-        // );
 
         Self {
             translation: self.translation - (Vec2::new(0.5, 0.5) - offset),
