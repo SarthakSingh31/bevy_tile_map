@@ -9,7 +9,7 @@ use crate::{
 
 #[derive(Debug, Default, Component)]
 pub struct TileMap {
-    pub(crate) tiles: Vec<Vec<Option<Tile>>>,
+    pub(crate) tiles: Vec<Vec<Tile>>,
     pub size: UVec3,
     pub chunk_size: UVec2,
     pub tile_size: UVec2,
@@ -27,7 +27,7 @@ impl TileMap {
         assert!(chunk_size.x >= 1 && chunk_size.y >= 1);
 
         TileMap {
-            tiles: vec![vec![None; (size.x * size.y) as usize]; 1],
+            tiles: vec![vec![Tile::None; (size.x * size.y) as usize]; 1],
             size: size.extend(1),
             chunk_size,
             tile_size,
@@ -36,7 +36,7 @@ impl TileMap {
         }
     }
 
-    pub fn get(&self, coord: UVec3) -> Option<&Option<Tile>> {
+    pub fn get(&self, coord: UVec3) -> Option<&Tile> {
         let index = self.coord_to_tile_idx(coord.truncate());
         if let Some(layer) = self.tiles.get(coord.z as usize) {
             layer.get(index)
@@ -45,7 +45,7 @@ impl TileMap {
         }
     }
 
-    pub fn get_mut(&mut self, coord: UVec3) -> Option<&mut Option<Tile>> {
+    pub fn get_mut(&mut self, coord: UVec3) -> Option<&mut Tile> {
         self.mark_chunk_dirty(coord);
 
         let index = self.coord_to_tile_idx(coord.truncate());
@@ -57,7 +57,7 @@ impl TileMap {
     }
 
     /// SAFETY: Does not mark the chunk as dirty. Does not do bound checks. So you need to do both yourself.
-    pub unsafe fn get_mut_unchecked(&mut self, coord: UVec3) -> &mut Option<Tile> {
+    pub unsafe fn get_mut_unchecked(&mut self, coord: UVec3) -> &mut Tile {
         let index = self.coord_to_tile_idx(coord.truncate());
         &mut self.tiles[coord.z as usize][index]
     }
@@ -67,11 +67,11 @@ impl TileMap {
         self.mark_all_chunks_dirty();
 
         self.tiles
-            .push(vec![None; (self.size.x * self.size.y) as usize]);
+            .push(vec![Tile::None; (self.size.x * self.size.y) as usize]);
         self.tiles.len() as u32 - 1
     }
 
-    pub fn add_layer(&mut self, tiles: Vec<Option<Tile>>) -> u32 {
+    pub fn add_layer(&mut self, tiles: Vec<Tile>) -> u32 {
         self.size.z += 1;
         self.mark_all_chunks_dirty();
 
@@ -116,7 +116,7 @@ impl TileMap {
 }
 
 impl Index<UVec3> for TileMap {
-    type Output = Option<Tile>;
+    type Output = Tile;
 
     #[inline]
     fn index(&self, coord: UVec3) -> &Self::Output {
@@ -136,7 +136,7 @@ impl IndexMut<UVec3> for TileMap {
 }
 
 impl Index<(u32, u32, u32)> for TileMap {
-    type Output = Option<Tile>;
+    type Output = Tile;
 
     #[inline]
     fn index(&self, coord: (u32, u32, u32)) -> &Self::Output {
@@ -152,7 +152,7 @@ impl IndexMut<(u32, u32, u32)> for TileMap {
 }
 
 impl Index<[u32; 3]> for TileMap {
-    type Output = Option<Tile>;
+    type Output = Tile;
 
     #[inline]
     fn index(&self, coord: [u32; 3]) -> &Self::Output {
@@ -168,21 +168,38 @@ impl IndexMut<[u32; 3]> for TileMap {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Tile {
-    pub idx: Option<u16>,
-    pub transform: TileTransform,
-    pub mask_color: Color,
+pub enum Tile {
+    Color(Color),
+    Sprite {
+        idx: u16,
+        transform: TileTransform,
+        mask_color: Color,
+    },
+    None,
 }
 
 impl Default for Tile {
     fn default() -> Self {
-        Self {
-            idx: None,
-            transform: TileTransform::default(),
-            mask_color: Color::WHITE,
-        }
+        Tile::None
     }
 }
+
+// #[derive(Debug, Clone, Copy)]
+// pub struct Tile {
+//     pub idx: Option<u16>,
+//     pub transform: TileTransform,
+//     pub mask_color: Color,
+// }
+
+// impl Default for Tile {
+//     fn default() -> Self {
+//         Self {
+//             idx: None,
+//             transform: TileTransform::default(),
+//             mask_color: Color::WHITE,
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone, Copy)]
 pub struct TileTransform {
@@ -220,7 +237,19 @@ impl Into<Mat3> for TileTransform {
     }
 }
 
+impl Into<Mat3> for &TileTransform {
+    fn into(self) -> Mat3 {
+        Mat3::from_scale_angle_translation(Vec2::ONE / self.scale, self.angle, -self.translation)
+    }
+}
+
 impl Into<Mat4> for TileTransform {
+    fn into(self) -> Mat4 {
+        Mat4::from_mat3(self.into())
+    }
+}
+
+impl Into<Mat4> for &TileTransform {
     fn into(self) -> Mat4 {
         Mat4::from_mat3(self.into())
     }

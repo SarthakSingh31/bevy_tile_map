@@ -186,7 +186,7 @@ impl SpecializedRenderPipeline for TileMapPipeline {
 
 pub struct ExtractedChunk {
     index: usize,
-    data: Vec<Option<Tile>>,
+    data: Vec<Tile>,
     chunk_size: UVec2,
     tile_size: UVec2,
     tile_sheet_handle: Handle<TileSheet>,
@@ -261,10 +261,22 @@ impl TileUniform {
 
 impl From<&Tile> for TileUniform {
     fn from(tile: &Tile) -> Self {
-        TileUniform {
-            idx: tile.idx.map(|idx| idx as i32).unwrap_or(-1),
-            transform: tile.transform.into(),
-            mask_color: tile.mask_color.into(),
+        match tile {
+            Tile::Color(color) => TileUniform {
+                idx: -1,
+                transform: Mat4::IDENTITY,
+                mask_color: color.as_linear_rgba_f32(),
+            },
+            Tile::Sprite {
+                idx,
+                transform,
+                mask_color,
+            } => TileUniform {
+                idx: *idx as i32,
+                transform: transform.into(),
+                mask_color: mask_color.as_linear_rgba_f32(),
+            },
+            Tile::None => TileUniform::DISCARD,
         }
     }
 }
@@ -307,11 +319,7 @@ pub fn prepare_tiles(
             tile_uniforms.0.get_mut(&chunk.index).unwrap()
         };
         for tile in &chunk.data {
-            if let Some(tile) = tile {
-                buffer.push(tile.into());
-            } else {
-                buffer.push(TileUniform::DISCARD);
-            }
+            buffer.push(tile.into());
         }
         buffer.write_buffer(&render_device, &render_queue);
     }

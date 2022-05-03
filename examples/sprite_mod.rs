@@ -1,5 +1,7 @@
 use bevy::{diagnostic, input::mouse::MouseWheel, prelude::*};
-use bevy_tile_map::{Tile, TileMap, TileMapBundle, TileMapPlugin, TileMapRayCastSource, TileSheet};
+use bevy_tile_map::{
+    Tile, TileMap, TileMapBundle, TileMapPlugin, TileMapRayCastSource, TileSheet, TileTransform,
+};
 use rand::prelude::*;
 
 fn main() {
@@ -39,10 +41,11 @@ fn setup(
 
     for x in 0..tile_map.size.x {
         for y in 0..tile_map.size.y {
-            tile_map[(x, y, 0)] = Some(Tile {
-                idx: Some(364),
-                ..Default::default()
-            });
+            tile_map[(x, y, 0)] = Tile::Sprite {
+                idx: 364,
+                transform: TileTransform::default(),
+                mask_color: Color::WHITE,
+            };
         }
     }
 
@@ -50,10 +53,11 @@ fn setup(
     for x in 0..tile_map.size.x {
         for y in 0..tile_map.size.y {
             if rng.gen_bool(0.3) {
-                tile_map[(x, y, 1)] = Some(Tile {
-                    idx: Some(255),
-                    ..Default::default()
-                });
+                tile_map[(x, y, 1)] = Tile::Sprite {
+                    idx: 255,
+                    transform: TileTransform::default(),
+                    mask_color: Color::WHITE,
+                };
             }
         }
     }
@@ -88,25 +92,30 @@ fn modify_sprites(
     for mut tile_map in tile_maps.iter_mut() {
         for x in 0..tile_map.size.x {
             for y in 0..tile_map.size.y {
-                if let Some(tile) = &mut tile_map[(x, y, 1)] {
-                    tile.transform.angle += 0.01;
+                if let Tile::Sprite {
+                    transform,
+                    mask_color,
+                    ..
+                } = &mut tile_map[(x, y, 1)]
+                {
+                    transform.angle += 0.01;
 
                     if x % 3 == 0 && y % 3 == 0 {
-                        tile.mask_color *= 0.99;
+                        *mask_color *= 0.99;
                     } else if x % 3 == 1 && y % 3 == 1 {
-                        tile.mask_color.set_a(tile.mask_color.a() * 0.99);
+                        mask_color.set_a(mask_color.a() * 0.99);
                     } else if x % 3 == 2 && y % 3 == 2 {
                         if timer.0.just_finished() {
-                            tile.mask_color =
+                            *mask_color =
                                 Color::rgba_u8(rng.gen(), rng.gen(), rng.gen(), rng.gen());
                         }
                     }
 
                     if x % 2 == 0 && y % 2 == 0 {
-                        tile.transform.scale *= 1.01;
+                        transform.scale *= 1.01;
                     }
 
-                    tile.transform = tile.transform.recenter();
+                    *transform = transform.recenter();
                 }
             }
         }

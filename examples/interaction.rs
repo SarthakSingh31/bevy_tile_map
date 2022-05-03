@@ -1,7 +1,7 @@
 use bevy::{input::mouse::MouseWheel, prelude::*};
 use bevy_tile_map::{
     Tile, TileMap, TileMapBundle, TileMapInteractionEvent, TileMapPlugin, TileMapRayCastSource,
-    TileSheet,
+    TileSheet, TileTransform,
 };
 use rand::prelude::*;
 
@@ -40,10 +40,11 @@ fn setup(
     for x in 0..tile_map.size.x {
         for y in 0..tile_map.size.y {
             if rng.gen_bool(0.3) {
-                tile_map[(x, y, 0)] = Some(Tile {
-                    idx: Some(364),
-                    ..Default::default()
-                });
+                tile_map[(x, y, 0)] = Tile::Sprite {
+                    idx: 364,
+                    transform: TileTransform::default(),
+                    mask_color: Color::WHITE,
+                };
             }
         }
     }
@@ -52,10 +53,11 @@ fn setup(
     for x in 0..tile_map.size.x {
         for y in 0..tile_map.size.y {
             if rng.gen_bool(0.3) {
-                tile_map[(x, y, 1)] = Some(Tile {
-                    idx: Some(255),
-                    ..Default::default()
-                });
+                tile_map[(x, y, 1)] = Tile::Sprite {
+                    idx: 255,
+                    transform: TileTransform::default(),
+                    mask_color: Color::WHITE,
+                };
             }
         }
     }

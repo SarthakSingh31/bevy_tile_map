@@ -1,5 +1,5 @@
 use bevy::{diagnostic, input::mouse::MouseWheel, prelude::*};
-use bevy_tile_map::{Tile, TileMap, TileMapBundle, TileMapPlugin, TileSheet};
+use bevy_tile_map::{Tile, TileMap, TileMapBundle, TileMapPlugin, TileSheet, TileTransform};
 use rand::prelude::*;
 
 fn main() {
@@ -40,10 +40,11 @@ fn setup(
     for layer in 0..10 {
         for x in 0..tile_map.size.x {
             for y in 0..tile_map.size.y {
-                tile_map[(x, y, layer)] = Some(Tile {
-                    idx: Some(rng.gen_range(0..512)),
-                    ..Default::default()
-                });
+                tile_map[(x, y, layer)] = Tile::Sprite {
+                    idx: rng.gen_range(0..512),
+                    transform: TileTransform::default(),
+                    mask_color: Color::WHITE,
+                };
             }
         }
         tile_map.add_empty_layer();
@@ -64,8 +65,8 @@ fn switch_to_next_texture(input: Res<Input<KeyCode>>, mut tile_maps: Query<&mut 
             for layer in 0..tile_map.size.z {
                 for x in 0..tile_map.size.x {
                     for y in 0..tile_map.size.x {
-                        if let Some(tile) = &mut tile_map[(x, y, layer)] {
-                            tile.idx = Some(rng.gen_range(0..512));
+                        if let Tile::Sprite { idx, .. } = &mut tile_map[(x, y, layer)] {
+                            *idx = rng.gen_range(0..512);
                         }
                     }
                 }

@@ -80,7 +80,7 @@ pub fn generate_or_update_chunks(
 
 #[derive(Debug, Default, Component, Clone)]
 pub struct ChunkData {
-    pub(crate) tiles: Vec<Option<Tile>>,
+    pub(crate) tiles: Vec<Tile>,
     pub(crate) chunk_coord: ChunkCoord,
     pub(crate) chunk_size: UVec2,
     pub(crate) tile_size: UVec2,
@@ -89,7 +89,7 @@ pub struct ChunkData {
 
 impl ChunkData {
     pub fn new(chunk_coord: ChunkCoord, tile_map: &TileMap, tile_sheet: Handle<TileSheet>) -> Self {
-        let mut tiles = vec![None; (tile_map.chunk_size.x * tile_map.chunk_size.y) as usize];
+        let mut tiles = vec![Tile::None; (tile_map.chunk_size.x * tile_map.chunk_size.y) as usize];
 
         Self::copy_tiles(
             &mut tiles,
@@ -121,8 +121,8 @@ impl ChunkData {
     }
 
     fn copy_tiles(
-        dest: &mut [Option<Tile>],
-        src: &[Option<Tile>],
+        dest: &mut [Tile],
+        src: &[Tile],
         chunk_coord: UVec2,
         chunk_size: UVec2,
         tile_map_size: UVec2,
@@ -145,7 +145,7 @@ impl ChunkData {
         }
     }
 
-    pub fn tiles(&self) -> &Vec<Option<Tile>> {
+    pub fn tiles(&self) -> &Vec<Tile> {
         &self.tiles
     }
 
