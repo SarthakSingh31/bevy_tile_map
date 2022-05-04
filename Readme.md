@@ -9,3 +9,5 @@ A tile map rendering plugin for bevy that supports:
 **IMPORTANT: Tiles in this plugin are indexed with UVec3's.**
 
 See the `minimal` example for a starting point. In that example you can use the arrow keys to change which sprite is being rendered.
+
+Assets from [0x72](https://0x72.itch.io/).
