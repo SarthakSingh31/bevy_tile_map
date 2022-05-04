@@ -2,6 +2,8 @@ use bevy::{diagnostic, input::mouse::MouseWheel, prelude::*};
 use bevy_tile_map::{Tile, TileMap, TileMapBundle, TileMapPlugin, TileSheet, TileTransform};
 use rand::prelude::*;
 
+// Controls: Arrow Up, Arrow Down, Arrow Left, Arrow Right to change every tile to a random sprite.
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
@@ -10,7 +12,7 @@ fn main() {
         .add_plugin(diagnostic::LogDiagnosticsPlugin::default())
         .add_plugin(TileMapPlugin)
         .add_startup_system(setup)
-        .add_system(switch_to_next_texture)
+        .add_system(switch_to_random_texture)
         .add_system(control_camera)
         .run();
 }
@@ -67,7 +69,7 @@ fn setup(
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
 }
 
-fn switch_to_next_texture(input: Res<Input<KeyCode>>, mut tile_maps: Query<&mut TileMap>) {
+fn switch_to_random_texture(input: Res<Input<KeyCode>>, mut tile_maps: Query<&mut TileMap>) {
     if input.just_pressed(KeyCode::Space) {
         let mut rng = thread_rng();
 
