@@ -23,7 +23,7 @@ use bevy::{
 };
 use bytemuck::{Pod, Zeroable};
 
-use crate::{chunk::ChunkData, Tile};
+use crate::{chunk::ChunkData, Tile, TileKind};
 
 pub use tile_sheet::TileSheet;
 
@@ -261,22 +261,22 @@ impl TileUniform {
 
 impl From<&Tile> for TileUniform {
     fn from(tile: &Tile) -> Self {
-        match tile {
-            Tile::Color(color) => TileUniform {
+        match &tile.kind {
+            Some(TileKind::Color(color)) => TileUniform {
                 idx: -1,
                 transform: Mat4::IDENTITY,
                 mask_color: color.as_rgba_f32(),
             },
-            Tile::Sprite {
+            Some(TileKind::Sprite {
                 idx,
                 transform,
                 mask_color,
-            } => TileUniform {
+            }) => TileUniform {
                 idx: *idx as i32,
                 transform: transform.into(),
                 mask_color: mask_color.as_rgba_f32(),
             },
-            Tile::None => TileUniform::DISCARD,
+            None => TileUniform::DISCARD,
         }
     }
 }

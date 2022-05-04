@@ -20,6 +20,13 @@ pub use interaction::{TileMapInteractionEvent, TileMapRayCastSource};
 pub use render::TileSheet;
 pub use tile_map::*;
 
+pub mod prelude {
+    pub use super::interaction::{TileMapInteractionEvent, TileMapRayCastSource};
+    pub use super::render::TileSheet;
+    pub use super::tile_map::*;
+    pub use super::TileMapPlugin;
+}
+
 pub struct TileMapPlugin;
 
 impl Plugin for TileMapPlugin {

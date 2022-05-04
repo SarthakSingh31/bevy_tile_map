@@ -1,5 +1,5 @@
 use bevy::{diagnostic, input::mouse::MouseWheel, prelude::*};
-use bevy_tile_map::{Tile, TileMap, TileMapBundle, TileMapPlugin, TileSheet, TileTransform};
+use bevy_tile_map::prelude::*;
 use rand::prelude::*;
 
 // Controls: Arrow Up, Arrow Down, Arrow Left, Arrow Right to change every tile to a random sprite.
@@ -43,10 +43,14 @@ fn setup(
     for layer in 0..10 {
         for x in 0..tile_map.size.x {
             for y in 0..tile_map.size.y {
-                tile_map[(x, y, layer)] = Tile::Sprite {
-                    idx: rng.gen_range(0..512),
-                    transform: TileTransform::default(),
-                    mask_color: Color::WHITE,
+                tile_map[(x, y, layer)] = Tile {
+                    entity: None,
+                    kind: Some(TileKind::Sprite {
+                        idx: rng.gen_range(0..512),
+                        transform: TileTransform::default(),
+                        mask_color: Color::WHITE,
+                    }),
+                    pickable: true,
                 };
             }
         }
@@ -77,7 +81,9 @@ fn switch_to_random_texture(input: Res<Input<KeyCode>>, mut tile_maps: Query<&mu
             for layer in 0..tile_map.size.z {
                 for x in 0..tile_map.size.x {
                     for y in 0..tile_map.size.x {
-                        if let Tile::Sprite { idx, .. } = &mut tile_map[(x, y, layer)] {
+                        if let Some(TileKind::Sprite { idx, .. }) =
+                            &mut tile_map[(x, y, layer)].kind
+                        {
                             *idx = rng.gen_range(0..512);
                         }
                     }

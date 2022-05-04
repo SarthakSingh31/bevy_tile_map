@@ -89,7 +89,8 @@ pub struct ChunkData {
 
 impl ChunkData {
     pub fn new(chunk_coord: ChunkCoord, tile_map: &TileMap, tile_sheet: Handle<TileSheet>) -> Self {
-        let mut tiles = vec![Tile::None; (tile_map.chunk_size.x * tile_map.chunk_size.y) as usize];
+        let mut tiles =
+            vec![Tile::default(); (tile_map.chunk_size.x * tile_map.chunk_size.y) as usize];
 
         Self::copy_tiles(
             &mut tiles,

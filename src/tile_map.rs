@@ -30,7 +30,7 @@ impl TileMap {
         assert!(chunk_size.x >= 1 && chunk_size.y >= 1);
 
         TileMap {
-            tiles: vec![vec![Tile::None; (size.x * size.y) as usize]; 1],
+            tiles: vec![vec![Tile::default(); (size.x * size.y) as usize]; 1],
             size: size.extend(1),
             chunk_size,
             tile_size,
@@ -70,7 +70,7 @@ impl TileMap {
         self.mark_all_chunks_dirty();
 
         self.tiles
-            .push(vec![Tile::None; (self.size.x * self.size.y) as usize]);
+            .push(vec![Tile::default(); (self.size.x * self.size.y) as usize]);
         self.tiles.len() as u32 - 1
     }
 
@@ -170,27 +170,27 @@ impl IndexMut<[u32; 3]> for TileMap {
     }
 }
 
+#[derive(Debug, Default, Component, Clone, Copy, PartialEq)]
+pub struct Tile {
+    pub entity: Option<Entity>,
+    pub kind: Option<TileKind>,
+    pub pickable: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Tile {
+pub enum TileKind {
     Color(Color),
     Sprite {
         idx: u16,
         transform: TileTransform,
         mask_color: Color,
     },
-    None,
-}
-
-impl Default for Tile {
-    fn default() -> Self {
-        Tile::None
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TileTransform {
-    pub translation: Vec2,
     pub angle: f32,
+    pub translation: Vec2,
     pub scale: Vec2,
 }
 
@@ -200,8 +200,8 @@ impl TileTransform {
         let offset = current.transform_point2(Vec2::new(0.5, 0.5));
 
         Self {
-            translation: self.translation - (Vec2::new(0.5, 0.5) - offset),
             angle: self.angle,
+            translation: self.translation - (Vec2::new(0.5, 0.5) - offset),
             scale: self.scale,
         }
     }
@@ -252,7 +252,7 @@ pub struct TileMapBundle {
 #[derive(Debug, Component, Clone, PartialEq)]
 pub struct AsTiles {
     pub coord: UVec3,
-    pub tiles: HashMap<UVec3, Tile>,
+    pub tiles: HashMap<UVec3, TileKind>,
     pub tile_map_entity: Entity,
 }
 
@@ -269,15 +269,19 @@ pub(crate) fn sync_as_tiles(
                 }
 
                 for (coord, ..) in &old_tiles.tiles {
-                    tile_map[old_tiles.coord + *coord] = Tile::None;
+                    tile_map[old_tiles.coord + *coord] = Tile::default();
                 }
                 *old_tiles = as_tiles.clone();
             } else {
                 sync_cache.insert(as_tiles_entity, as_tiles.clone());
             }
 
-            for (coord, tile) in &as_tiles.tiles {
-                tile_map[as_tiles.coord + *coord] = *tile;
+            for (coord, tile_kind) in &as_tiles.tiles {
+                tile_map[as_tiles.coord + *coord] = Tile {
+                    entity: Some(as_tiles_entity),
+                    kind: Some(*tile_kind),
+                    pickable: true,
+                };
             }
         } else {
             warn!("TileMap entity for a AsTiles does not exist");

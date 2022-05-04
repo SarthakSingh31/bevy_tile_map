@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_mod_raycast::*;
 
-use crate::{chunk::ChunkData, Tile};
+use crate::chunk::ChunkData;
 
 pub fn update_camera_ray(
     windows: Res<Windows>,
@@ -58,18 +58,16 @@ pub fn queue_interaction_events(
                     .as_uvec2()
                     % chunk_data.chunk_size;
 
-                match chunk_data.tiles
+                if chunk_data.tiles
                     [(chunk_tile_coord.y * chunk_data.chunk_size.x + chunk_tile_coord.x) as usize]
+                    .pickable
                 {
-                    Tile::None => continue,
-                    _ => {
-                        let coord = (chunk_tile_coord
-                            + chunk_data.chunk_size * chunk_data.chunk_coord.0.truncate())
-                        .extend(chunk_data.chunk_coord.0.z);
+                    let coord = (chunk_tile_coord
+                        + chunk_data.chunk_size * chunk_data.chunk_coord.0.truncate())
+                    .extend(chunk_data.chunk_coord.0.z);
 
-                        new_selected = Some((tile_map_entity.0, coord));
-                        break;
-                    }
+                    new_selected = Some((tile_map_entity.0, coord));
+                    break;
                 }
             }
         }

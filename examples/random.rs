@@ -1,5 +1,5 @@
 use bevy::{diagnostic, input::mouse::MouseWheel, prelude::*};
-use bevy_tile_map::{Tile, TileMap, TileMapBundle, TileMapPlugin, TileSheet, TileTransform};
+use bevy_tile_map::prelude::*;
 use rand::prelude::*;
 
 fn main() {
@@ -36,10 +36,14 @@ fn setup(
 
     for x in 0..tile_map.size.x {
         for y in 0..tile_map.size.y {
-            tile_map[(x, y, 0)] = Tile::Sprite {
-                idx: rng.gen_range(0..256),
-                transform: TileTransform::default(),
-                mask_color: Color::WHITE,
+            tile_map[(x, y, 0)] = Tile {
+                entity: None,
+                kind: Some(TileKind::Sprite {
+                    idx: rng.gen_range(0..256),
+                    transform: TileTransform::default(),
+                    mask_color: Color::WHITE,
+                }),
+                pickable: true,
             };
         }
     }
@@ -76,9 +80,8 @@ fn switch_tiles_to_random(
         for mut tile_map in tile_maps.iter_mut() {
             for x in 0..tile_map.size.x {
                 for y in 0..tile_map.size.x {
-                    if let Tile::Sprite { idx, .. } =
-                        unsafe { tile_map.get_mut_unchecked(UVec3::new(x, y, 0)) }
-                    {
+                    let tile = unsafe { tile_map.get_mut_unchecked(UVec3::new(x, y, 0)) };
+                    if let Some(TileKind::Sprite { idx, .. }) = &mut tile.kind {
                         *idx = rng.gen_range(0..256);
                     }
                 }

@@ -1,7 +1,5 @@
 use bevy::{diagnostic, input::mouse::MouseWheel, prelude::*, utils::HashMap};
-use bevy_tile_map::{
-    AsTiles, Tile, TileMap, TileMapBundle, TileMapPlugin, TileSheet, TileTransform,
-};
+use bevy_tile_map::prelude::*;
 
 // Controls: Arrow Up, Arrow Down, Arrow Left, Arrow Right to move the multi tile sprite.
 
@@ -41,10 +39,14 @@ fn setup(
 
     for x in 0..tile_map.size.x {
         for y in 0..tile_map.size.y {
-            tile_map[(x, y, 0)] = Tile::Sprite {
-                idx: 364,
-                transform: TileTransform::default(),
-                mask_color: Color::WHITE,
+            tile_map[(x, y, 0)] = Tile {
+                entity: None,
+                kind: Some(TileKind::Sprite {
+                    idx: 364,
+                    transform: TileTransform::default(),
+                    mask_color: Color::WHITE,
+                }),
+                pickable: true,
             };
         }
     }
@@ -74,7 +76,7 @@ fn setup(
         tiles: HashMap::from_iter([
             (
                 UVec3::new(0, 1, 0),
-                Tile::Sprite {
+                TileKind::Sprite {
                     idx: 186,
                     transform: TileTransform {
                         translation: Vec2::new(1.0 - scale, 0.0) * (1.0 / scale),
@@ -86,7 +88,7 @@ fn setup(
             ),
             (
                 UVec3::new(1, 1, 0),
-                Tile::Sprite {
+                TileKind::Sprite {
                     idx: 187,
                     transform: TileTransform {
                         scale: Vec2::new(scale, scale),
@@ -97,7 +99,7 @@ fn setup(
             ),
             (
                 UVec3::new(0, 0, 0),
-                Tile::Sprite {
+                TileKind::Sprite {
                     idx: 202,
                     transform: TileTransform {
                         translation: Vec2::new(1.0 - scale, 1.0 - scale) * (1.0 / scale),
@@ -109,7 +111,7 @@ fn setup(
             ),
             (
                 UVec3::new(1, 0, 0),
-                Tile::Sprite {
+                TileKind::Sprite {
                     idx: 203,
                     transform: TileTransform {
                         translation: Vec2::new(0.0, 1.0 - scale) * (1.0 / scale),

@@ -1,7 +1,5 @@
 use bevy::{diagnostic, input::mouse::MouseWheel, prelude::*};
-use bevy_tile_map::{
-    Tile, TileMap, TileMapBundle, TileMapPlugin, TileMapRayCastSource, TileSheet, TileTransform,
-};
+use bevy_tile_map::prelude::*;
 use rand::prelude::*;
 
 fn main() {
@@ -42,10 +40,14 @@ fn setup(
 
     for x in 0..tile_map.size.x {
         for y in 0..tile_map.size.y {
-            tile_map[(x, y, 0)] = Tile::Sprite {
-                idx: 364,
-                transform: TileTransform::default(),
-                mask_color: Color::WHITE,
+            tile_map[(x, y, 0)] = Tile {
+                entity: None,
+                kind: Some(TileKind::Sprite {
+                    idx: 364,
+                    transform: TileTransform::default(),
+                    mask_color: Color::WHITE,
+                }),
+                pickable: true,
             };
         }
     }
@@ -54,10 +56,14 @@ fn setup(
     for x in 0..tile_map.size.x {
         for y in 0..tile_map.size.y {
             if rng.gen_bool(0.3) {
-                tile_map[(x, y, 1)] = Tile::Sprite {
-                    idx: 255,
-                    transform: TileTransform::default(),
-                    mask_color: Color::WHITE,
+                tile_map[(x, y, 1)] = Tile {
+                    entity: None,
+                    kind: Some(TileKind::Sprite {
+                        idx: 255,
+                        transform: TileTransform::default(),
+                        mask_color: Color::WHITE,
+                    }),
+                    pickable: true,
                 };
             }
         }
@@ -102,11 +108,11 @@ fn modify_sprites(
     for mut tile_map in tile_maps.iter_mut() {
         for x in 0..tile_map.size.x {
             for y in 0..tile_map.size.y {
-                if let Tile::Sprite {
+                if let Some(TileKind::Sprite {
                     transform,
                     mask_color,
                     ..
-                } = &mut tile_map[(x, y, 1)]
+                }) = &mut tile_map[(x, y, 1)].kind
                 {
                     transform.angle += 0.01;
 
