@@ -76,7 +76,7 @@ fn fragment(in: VertexOutput) -> [[location(0)]] vec4<f32> {
         return tile.mask_color;
     }
 
-    if (tile.idx == -2 || uv.x > 1.0 || uv.x < 0.0 || uv.y > 1.0 || uv.y < 0.0) {
+    if (tile.idx == -2 || uv.x > 1.01 || uv.x < -0.01 || uv.y > 1.01 || uv.y < -0.01) {
         discard;
     }
 

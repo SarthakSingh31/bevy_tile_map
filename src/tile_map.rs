@@ -1,6 +1,9 @@
 use std::ops::{Index, IndexMut};
 
-use bevy::{prelude::*, utils::HashSet};
+use bevy::{
+    prelude::*,
+    utils::{HashMap, HashSet},
+};
 
 use crate::{
     chunk::{ChunkCoord, ChunkEntities},
@@ -167,7 +170,7 @@ impl IndexMut<[u32; 3]> for TileMap {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Tile {
     Color(Color),
     Sprite {
@@ -184,24 +187,7 @@ impl Default for Tile {
     }
 }
 
-// #[derive(Debug, Clone, Copy)]
-// pub struct Tile {
-//     pub idx: Option<u16>,
-//     pub transform: TileTransform,
-//     pub mask_color: Color,
-// }
-
-// impl Default for Tile {
-//     fn default() -> Self {
-//         Self {
-//             idx: None,
-//             transform: TileTransform::default(),
-//             mask_color: Color::WHITE,
-//         }
-//     }
-// }
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TileTransform {
     pub translation: Vec2,
     pub angle: f32,
@@ -261,4 +247,40 @@ pub struct TileMapBundle {
     pub chunks: ChunkEntities,
     #[bundle]
     pub transform: TransformBundle,
+}
+
+#[derive(Debug, Component, Clone, PartialEq)]
+pub struct AsTiles {
+    pub coord: UVec3,
+    pub tiles: HashMap<UVec3, Tile>,
+    pub tile_map_entity: Entity,
+}
+
+pub(crate) fn sync_as_tiles(
+    mut sync_cache: Local<HashMap<Entity, AsTiles>>,
+    mut tile_maps: Query<&mut TileMap>,
+    as_tiles_query: Query<(Entity, &AsTiles)>,
+) {
+    for (as_tiles_entity, as_tiles) in as_tiles_query.iter() {
+        if let Ok(mut tile_map) = tile_maps.get_mut(as_tiles.tile_map_entity) {
+            if let Some(old_tiles) = sync_cache.get_mut(&as_tiles_entity) {
+                if old_tiles == as_tiles {
+                    continue;
+                }
+
+                for (coord, ..) in &old_tiles.tiles {
+                    tile_map[old_tiles.coord + *coord] = Tile::None;
+                }
+                *old_tiles = as_tiles.clone();
+            } else {
+                sync_cache.insert(as_tiles_entity, as_tiles.clone());
+            }
+
+            for (coord, tile) in &as_tiles.tiles {
+                tile_map[as_tiles.coord + *coord] = *tile;
+            }
+        } else {
+            warn!("TileMap entity for a AsTiles does not exist");
+        }
+    }
 }

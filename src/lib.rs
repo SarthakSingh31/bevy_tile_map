@@ -39,7 +39,11 @@ impl Plugin for TileMapPlugin {
                 CoreStage::PreUpdate,
                 interaction::queue_interaction_events.after(RaycastSystem::UpdateRaycast),
             )
-            .add_system(chunk::generate_or_update_chunks);
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                tile_map::sync_as_tiles.before(chunk::generate_or_update_chunks),
+            )
+            .add_system_to_stage(CoreStage::PostUpdate, chunk::generate_or_update_chunks);
 
         let shader = app
             .world
