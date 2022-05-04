@@ -41,7 +41,7 @@ pub fn queue_interaction_events(
     mouse_button_input: Res<Input<MouseButton>>,
     mut interaction_writer: EventWriter<TileMapInteractionEvent>,
     ray_source: Query<&TileMapRayCastSource>,
-    chunks: Query<(&ChunkData, &Parent)>,
+    chunks: Query<(&GlobalTransform, &ChunkData, &Parent)>,
 ) {
     let source = if let Ok(source) = ray_source.get_single() {
         source
@@ -52,8 +52,8 @@ pub fn queue_interaction_events(
     let mut new_selected = None;
     if let Some(intersections) = source.intersect_list() {
         for (entity, intersection) in intersections {
-            if let Ok((chunk_data, tile_map_entity)) = chunks.get(*entity) {
-                let position = intersection.position();
+            if let Ok((transform, chunk_data, tile_map_entity)) = chunks.get(*entity) {
+                let position = intersection.position() - transform.translation;
                 let chunk_tile_coord = (position.truncate() / chunk_data.tile_size.as_vec2())
                     .as_uvec2()
                     % chunk_data.chunk_size;

@@ -18,6 +18,7 @@ fn main() {
 
 fn setup(
     mut commands: Commands,
+    windows: Res<Windows>,
     asset_server: Res<AssetServer>,
     mut tile_sheets: ResMut<Assets<TileSheet>>,
 ) {
@@ -47,9 +48,19 @@ fn setup(
     }
 
     tile_map.add_empty_layer();
+
+    let window = windows.get_primary().unwrap();
     let tile_map_entity = commands
         .spawn_bundle(TileMapBundle {
             tile_map,
+            transform: TransformBundle {
+                local: Transform::from_translation(Vec3::new(
+                    -window.width() / 2.0,
+                    -window.height() / 2.0,
+                    0.0,
+                )),
+                ..Default::default()
+            },
             ..Default::default()
         })
         .id();
