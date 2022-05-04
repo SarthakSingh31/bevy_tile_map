@@ -3,6 +3,8 @@ use bevy_tile_map::{
     AsTiles, Tile, TileMap, TileMapBundle, TileMapPlugin, TileSheet, TileTransform,
 };
 
+// Controls: Arrow Up, Arrow Down, Arrow Left, Arrow Right to move the multi tile sprite.
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)

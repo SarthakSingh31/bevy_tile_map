@@ -1,6 +1,8 @@
 use bevy::{diagnostic, input::mouse::MouseWheel, prelude::*};
 use bevy_tile_map::{Tile, TileMap, TileMapBundle, TileMapPlugin, TileSheet, TileTransform};
 
+// Controls: Arrow Up, Arrow Down, Arrow Left, Arrow Right to navigate the sprite sheet.
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)

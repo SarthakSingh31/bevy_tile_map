@@ -5,6 +5,8 @@ use bevy_tile_map::{
 };
 use rand::prelude::*;
 
+// Controls: Click on tiles to get the tile position logged in the console.
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
