@@ -262,9 +262,9 @@ impl TileUniform {
 impl From<&Tile> for TileUniform {
     fn from(tile: &Tile) -> Self {
         match &tile.kind {
-            Some(TileKind::Color(color)) => TileUniform {
+            Some(TileKind::Color { color, transform }) => TileUniform {
                 idx: -1,
-                transform: Mat4::IDENTITY,
+                transform: transform.into(),
                 mask_color: color.as_rgba_f32(),
             },
             Some(TileKind::Sprite {

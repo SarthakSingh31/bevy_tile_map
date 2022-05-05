@@ -179,7 +179,10 @@ pub struct Tile {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TileKind {
-    Color(Color),
+    Color {
+        color: Color,
+        transform: TileTransform,
+    },
     Sprite {
         idx: u16,
         transform: TileTransform,
