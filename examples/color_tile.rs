@@ -17,16 +17,9 @@ fn main() {
 fn setup(
     mut commands: Commands,
     windows: Res<Windows>,
-    asset_server: Res<AssetServer>,
     mut tile_sheets: ResMut<Assets<TileSheet>>,
 ) {
-    let tile_sheet = tile_sheets.add(TileSheet::new(
-        vec![
-            asset_server.load("0x72_16x16DungeonTileset.v4.png"),
-            asset_server.load("0x72_16x16DungeonTileset_walls.v2.png"),
-        ],
-        UVec2::new(16, 16),
-    ));
+    let tile_sheet = tile_sheets.add(TileSheet::empty());
 
     let mut tile_map = TileMap::new(
         UVec2::new(256, 256),
@@ -52,22 +45,22 @@ fn setup(
         }
     }
 
-    tile_map.add_empty_layer();
-    for x in 0..tile_map.size.x {
-        for y in 0..tile_map.size.y {
-            if rng.gen_bool(0.3) {
-                tile_map[(x, y, 1)] = Tile {
-                    entity: None,
-                    kind: Some(TileKind::Sprite {
-                        idx: 255,
-                        transform: TileTransform::default(),
-                        mask_color: Color::WHITE,
-                    }),
-                    pickable: true,
-                };
-            }
-        }
-    }
+    // tile_map.add_empty_layer();
+    // for x in 0..tile_map.size.x {
+    //     for y in 0..tile_map.size.y {
+    //         if rng.gen_bool(0.3) {
+    //             tile_map[(x, y, 1)] = Tile {
+    //                 entity: None,
+    //                 kind: Some(TileKind::Sprite {
+    //                     idx: 255,
+    //                     transform: TileTransform::default(),
+    //                     mask_color: Color::WHITE,
+    //                 }),
+    //                 pickable: true,
+    //             };
+    //         }
+    //     }
+    // }
 
     let window = windows.get_primary().unwrap();
     commands.spawn_bundle(TileMapBundle {

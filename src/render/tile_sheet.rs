@@ -2,13 +2,14 @@ use std::num::NonZeroU32;
 
 use bevy::{
     ecs::system::{lifetimeless::SRes, SystemParamItem},
+    math::const_uvec2,
     prelude::*,
     reflect::TypeUuid,
     render::{
         render_asset::{PrepareAssetError, RenderAsset},
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
-        texture::TextureFormatPixelInfo,
+        texture::{BevyDefault, TextureFormatPixelInfo},
     },
     utils::HashSet,
 };
@@ -36,6 +37,16 @@ impl TileSheet {
             tile_data: Vec::new(),
             array_count: 0,
             format: None,
+        }
+    }
+
+    pub fn empty() -> TileSheet {
+        TileSheet {
+            tile_sets: Vec::new(),
+            tile_size: const_uvec2!([1, 1]),
+            tile_data: vec![0, 0, 0, 0],
+            array_count: 1,
+            format: Some(TextureFormat::bevy_default()),
         }
     }
 
